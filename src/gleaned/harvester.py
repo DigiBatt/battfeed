@@ -2,6 +2,7 @@ import pandas as pd
 import threading
 import time
 from typing import Callable, Optional
+from gleaned.datasources.base import DataSource
 
 class DataHarvester:
     def __init__(self):
@@ -16,24 +17,35 @@ class DataHarvester:
         print(f"Registered source: {source.metadata()['source']}")
 
     # Option 1: Harvest Static Data
-    def harvest_static(self, source_name: str) -> pd.DataFrame:
-        """Harvest static data from a registered source."""
-        source = self._get_source_by_name(source_name)
-        print(f"Harvesting static data from source: {source_name}")
+    def harvest_static(self, source: DataSource) -> pd.DataFrame:
+        """
+        Harvest static data from a registered source.
+        :param source: The data source object.
+        :return: A DataFrame containing the harvested data.
+        """
+        print(f"Harvesting static data from source: {source.metadata()['source']}")
         data = source.collect_data()
         if data.empty:
-            print(f"No data collected from {source_name}.")
+            print(f"No data collected from {source.metadata()['source']}.")
         else:
-            print(f"Collected {len(data)} rows from {source_name}.")
+            print(f"Collected {len(data)} rows from {source.metadata()['source']}.")
         return data
 
+
     # Option 2: Harvest Live Data by Interval
-    def harvest_live_by_interval(self, source_name: str, duration: int, serialize_path: Optional[str] = None):
+    def harvest_live(
+        self, 
+        source_name: str, 
+        duration: int, 
+        serialize_path: Optional[str] = None, 
+        print_data: bool = False
+    ):
         """
         Harvest live data for a specified duration.
         :param source_name: Name of the data source.
         :param duration: Duration in seconds for data collection.
         :param serialize_path: Path to save the data (optional).
+        :param print_data: Whether to print collected data to the console.
         """
         source = self._get_source_by_name(source_name)
         print(f"Starting live data harvesting for {duration} seconds from source: {source_name}")
@@ -43,7 +55,11 @@ class DataHarvester:
             try:
                 data = source.collect_data()
                 if not data.empty:
-                    print(f"Collected {len(data)} rows from {source_name}.")
+                    if print_data:
+                        print(f"Collected {len(data)} rows from {source_name}:")
+                        print(data)
+                    
+                    # Store collected data
                     self.collected_data[source.metadata()["source"]] = pd.concat(
                         [self.collected_data[source.metadata()["source"]], data], ignore_index=True
                     )
@@ -55,6 +71,10 @@ class DataHarvester:
 
         if serialize_path:
             self._serialize_data(source.metadata()["source"], serialize_path)
+            print(f"Data saved to {serialize_path}")
+
+        print("Live data harvesting complete.")
+
 
     # Option 3: Harvest Live Data Continuously
     def harvest_live_and_print(self, source_name: str, duration: int):
@@ -82,7 +102,7 @@ class DataHarvester:
         print("Live data harvesting complete.")
 
 
-    def snapshot_live_status(self, source_name: str) -> dict:
+    def get_live_status(self, source_name: str) -> dict:
         """
         Get a one-time snapshot of the live status from a data source.
         :param source_name: Name of the data source.

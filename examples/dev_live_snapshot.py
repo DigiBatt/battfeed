@@ -7,7 +7,7 @@ wmi_source = WMIDataSource(refresh_interval=5)
 harvester.register_source(wmi_source)
 
 # Take a snapshot from the live source
-snapshot = harvester.snapshot_live_status("BatteryStatus via WMI")
+snapshot = harvester.get_live_status("BatteryStatus via WMI")
 if snapshot:
     print("Snapshot data as dictionary:")
     print(snapshot)
