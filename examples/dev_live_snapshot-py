@@ -1,0 +1,15 @@
+from gleaned.harvester import DataHarvester
+from gleaned.datasources.wmi_source import WMIDataSource
+
+# Initialize the harvester and register a source
+harvester = DataHarvester()
+wmi_source = WMIDataSource(refresh_interval=5)
+harvester.register_source(wmi_source)
+
+# Take a snapshot from the live source
+snapshot = harvester.snapshot_live_status("BatteryStatus via WMI")
+if snapshot:
+    print("Snapshot data as dictionary:")
+    print(snapshot)
+else:
+    print("No data available in the snapshot.")
