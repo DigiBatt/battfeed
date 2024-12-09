@@ -10,11 +10,18 @@ class DataHarvester:
         self.collected_data = {}
         self._stop_flag = threading.Event()  # Shared flag to stop live harvesting threads
 
-    def register_source(self, source):
-        """Register a new data source."""
-        self.sources.append(source)
-        self.collected_data[source.metadata()["source"]] = pd.DataFrame()
-        print(f"Registered source: {source.metadata()['source']}")
+    def register_source(self, sources):
+        """
+        Register one or more data sources.
+        :param sources: A single data source or a list of data sources.
+        """
+        if not isinstance(sources, list):
+            sources = [sources]
+
+        for source in sources:
+            self.sources.append(source)
+            self.collected_data[source.metadata()["source"]] = pd.DataFrame()
+            print(f"Registered source: {source.metadata()['source']}")
 
     # Option 1: Harvest Static Data
     def harvest_static(self, source: DataSource) -> pd.DataFrame:

@@ -14,3 +14,4 @@ __version__ = pkg_resources.get_distribution("gleaned").version
 from .harvester import DataHarvester
 from .datasources.base import DataSource
 from .datasources.wmi_source import WMIDataSource
+from .datasources.file_source import FileSource
