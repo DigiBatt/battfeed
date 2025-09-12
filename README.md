@@ -1,7 +1,6 @@
 # Gleaned
 
-*A tiny, fast toolkit for “gleaning” structured facts from messy files.*  
-Turn folders of CSV/JSON/Excel/Parquet (and their chaotic column names) into tidy, typed dataframes with validated metadata and simple pipelines you can run in code or from the CLI.
+A fast toolkit for “gleaning” structured facts from messy files. Turn folders of CSV/JSON/Excel/Parquet into tidy, typed dataframes with validated metadata and simple pipelines you can run in code or from the CLI.
 
 ## Features
 
