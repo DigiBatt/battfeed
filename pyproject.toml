@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gleaned"
+version = "0.2.0"
+description = "Turn live battery data sources into BDF feeds"
+readme = "README.md"
+authors = [{ name = "Simon Clark" }]
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = []
+keywords = ["battery", "bdf", "battery-data-format", "data-acquisition", "digibatt"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.urls]
+Homepage = "https://github.com/DigiBatt/gleaned"
+Issues = "https://github.com/DigiBatt/gleaned/issues"
+
+[project.optional-dependencies]
+wmi = ["wmi"]
+bdf = ["batterydf"]
+dev = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+gleaned = "gleaned.cli:main"
+
+# The built-in sources are registered through the same entry-point group that
+# third-party packages use, so the plugin mechanism is exercised by gleaned itself.
+[project.entry-points."gleaned.sources"]
+simulator = "gleaned.sources.simulator:SimulatedCellSource"
+csvtail = "gleaned.sources.csvtail:CsvTailSource"
+wmi = "gleaned.sources.wmi_battery:WmiBatterySource"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true

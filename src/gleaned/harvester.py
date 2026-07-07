@@ -1,167 +1,169 @@
-import pandas as pd
+"""Polling loop that moves samples from a :class:`DataSource` into a :class:`Sink`.
+
+The :class:`Harvester` owns no I/O of its own: sources produce samples,
+sinks persist them, and the harvester just runs the clock. The clock and
+sleep functions are injectable so the loop can be tested (and simulated)
+without waiting on wall time.
+"""
+
+from __future__ import annotations
+
+import logging
 import threading
 import time
-from typing import Callable, Optional
-from gleaned.datasources.base import DataSource
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Callable
 
-class DataHarvester:
-    def __init__(self):
-        self.sources = []
-        self.collected_data = {}
-        self._stop_flag = threading.Event()  # Shared flag to stop live harvesting threads
+from .protocols import DataSource, Sink
 
-    def register_source(self, sources):
+__all__ = ["CollectStats", "Harvester"]
+
+logger = logging.getLogger(__name__)
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+@dataclass
+class CollectStats:
+    """Summary of one :meth:`Harvester.collect` run."""
+
+    samples: int
+    """Total number of samples written to the sink."""
+
+    duration_s: float
+    """Elapsed collection time in seconds (measured with the injected clock)."""
+
+    started_at: str
+    """Wall-clock start of the run as an ISO 8601 UTC timestamp."""
+
+    source: str
+    """Name of the source that was collected."""
+
+    columns: list[str] = field(default_factory=list)
+    """Sorted union of the column names seen across all samples."""
+
+
+class Harvester:
+    """Registers named sources and runs timed collection loops against them.
+
+    Typical use::
+
+        harvester = Harvester()
+        harvester.register(SimulatedCellSource())
+        sink = BdfCsvSink("LOCAL__DemoCell__20260707_001.bdf.csv")
+        stats = harvester.collect("simulator", duration_s=60, interval_s=1.0, sink=sink)
+        sink.close()
+
+    The harvester never closes the sink and never closes the source: their
+    owner (your script, or the gleaned CLI) does. This keeps repeated
+    collections against the same source or sink possible.
+    """
+
+    def __init__(self) -> None:
+        self._sources: dict[str, DataSource] = {}
+        self._status: dict[str, dict[str, Any]] = {}
+
+    def register(self, source: DataSource) -> None:
+        """Register ``source`` under its ``name``. Re-registering replaces it."""
+        name = source.name
+        if name in self._sources:
+            logger.warning("Replacing already-registered source %r", name)
+        self._sources[name] = source
+        self._status.setdefault(name, {"last_poll_at": None, "samples_collected": 0})
+        logger.info("Registered source %r", name)
+
+    @property
+    def sources(self) -> dict[str, DataSource]:
+        """Mapping of registered source names to source objects (a copy)."""
+        return dict(self._sources)
+
+    def status(self, source_name: str) -> dict[str, Any]:
+        """Return a status snapshot for ``source_name``.
+
+        The dict always contains ``registered`` (bool), ``last_poll_at``
+        (ISO 8601 string or ``None``) and ``samples_collected`` (int, total
+        across all collect runs in this harvester's lifetime).
         """
-        Register one or more data sources.
-        :param sources: A single data source or a list of data sources.
+        state = self._status.get(source_name, {})
+        return {
+            "registered": source_name in self._sources,
+            "last_poll_at": state.get("last_poll_at"),
+            "samples_collected": state.get("samples_collected", 0),
+        }
+
+    def collect(
+        self,
+        source_name: str,
+        *,
+        duration_s: float,
+        interval_s: float = 1.0,
+        sink: Sink,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+        stop: threading.Event | None = None,
+    ) -> CollectStats:
+        """Poll ``source_name`` every ``interval_s`` for ``duration_s`` seconds.
+
+        Each iteration: poll the source, stamp ``test_time_second`` (elapsed
+        time from the injected ``clock``) onto samples that lack it, hand the
+        batch to ``sink.write``, then sleep until the next tick. The loop
+        ends when ``duration_s`` has elapsed or ``stop`` is set, whichever
+        comes first.
+
+        ``clock`` and ``sleep`` exist so tests can drive the loop with fake
+        time; production callers keep the defaults.
+
+        Raises:
+            KeyError: if ``source_name`` is not registered.
         """
-        if not isinstance(sources, list):
-            sources = [sources]
-
-        for source in sources:
-            self.sources.append(source)
-            self.collected_data[source.metadata()["source"]] = pd.DataFrame()
-            print(f"Registered source: {source.metadata()['source']}")
-
-    # Option 1: Harvest Static Data
-    def harvest_static(self, source: DataSource) -> pd.DataFrame:
-        """
-        Harvest static data from a registered source.
-        :param source: The data source object.
-        :return: A DataFrame containing the harvested data.
-        """
-        print(f"Harvesting static data from source: {source.metadata()['source']}")
-        data = source.collect_data()
-        if data.empty:
-            print(f"No data collected from {source.metadata()['source']}.")
-        else:
-            print(f"Collected {len(data)} rows from {source.metadata()['source']}.")
-        return data
-
-
-    # Option 2: Harvest Live Data by Interval
-    def harvest_live(
-        self, 
-        source_name: str, 
-        duration: int, 
-        serialize_path: Optional[str] = None, 
-        print_data: bool = False
-    ):
-        """
-        Harvest live data for a specified duration.
-        :param source_name: Name of the data source.
-        :param duration: Duration in seconds for data collection.
-        :param serialize_path: Path to save the data (optional).
-        :param print_data: Whether to print collected data to the console.
-        """
-        source = self._get_source_by_name(source_name)
-        print(f"Starting live data harvesting for {duration} seconds from source: {source_name}")
-        start_time = time.time()
-
-        while time.time() - start_time < duration and not self._stop_flag.is_set():
-            try:
-                data = source.collect_data()
-                if not data.empty:
-                    if print_data:
-                        print(f"Collected {len(data)} rows from {source_name}:")
-                        print(data)
-                    
-                    # Store collected data
-                    self.collected_data[source.metadata()["source"]] = pd.concat(
-                        [self.collected_data[source.metadata()["source"]], data], ignore_index=True
-                    )
-                else:
-                    print(f"No data collected this cycle from {source_name}.")
-            except Exception as e:
-                print(f"Error while collecting data: {e}")
-            time.sleep(source.refresh_interval)
-
-        if serialize_path:
-            self._serialize_data(source.metadata()["source"], serialize_path)
-            print(f"Data saved to {serialize_path}")
-
-        print("Live data harvesting complete.")
-
-
-    # Option 3: Harvest Live Data Continuously
-    def harvest_live_and_print(self, source_name: str, duration: int):
-        """
-        Harvest live data for a specified duration and print the values.
-        :param source_name: Name of the data source.
-        :param duration: Duration in seconds for data collection.
-        """
-        source = self._get_source_by_name(source_name)
-        print(f"Starting live data harvesting for {duration} seconds from source: {source_name}")
-        start_time = time.time()
-
-        while time.time() - start_time < duration and not self._stop_flag.is_set():
-            try:
-                data = source.collect_data()
-                if not data.empty:
-                    print(f"Collected {len(data)} rows from {source_name}:")
-                    print(data)
-                else:
-                    print(f"No data collected this cycle from {source_name}.")
-            except Exception as e:
-                print(f"Error while collecting data: {e}")
-            time.sleep(source.refresh_interval)
-
-        print("Live data harvesting complete.")
-
-
-    def get_live_status(self, source_name: str) -> dict:
-        """
-        Get a one-time snapshot of the live status from a data source.
-        :param source_name: Name of the data source.
-        :return: A dictionary with the collected values or an empty dictionary if no data is collected.
-        """
-        source = self._get_source_by_name(source_name)
-        print(f"Taking a snapshot of the live status from source: {source_name}")
-
         try:
-            data = source.collect_data()
-            if not data.empty:
-                print(f"Snapshot collected with {len(data)} rows:")
-                print(data)
-                # Convert the first row of the dataframe to a dictionary
-                return data.iloc[0].to_dict()
-            else:
-                print(f"No data collected from source: {source_name}")
-        except Exception as e:
-            print(f"Error while collecting snapshot: {e}")
+            source = self._sources[source_name]
+        except KeyError:
+            raise KeyError(
+                f"No source registered under {source_name!r}. "
+                f"Registered sources: {sorted(self._sources) or 'none'}"
+            ) from None
+        if interval_s <= 0:
+            raise ValueError(f"interval_s must be positive, got {interval_s}")
 
-        return {}
+        state = self._status[source_name]
+        started_at = _utcnow_iso()
+        columns: set[str] = set()
+        samples = 0
+        start = clock()
+        logger.info(
+            "Collecting from %r for %.3gs at %.3gs intervals", source_name, duration_s, interval_s
+        )
 
+        while (clock() - start) < duration_s and not (stop is not None and stop.is_set()):
+            batch = [dict(row) for row in source.poll()]
+            elapsed = clock() - start
+            for row in batch:
+                row.setdefault("test_time_second", elapsed)
+                columns.update(row)
+            if batch:
+                sink.write(batch)
+                samples += len(batch)
+            state["last_poll_at"] = _utcnow_iso()
+            state["samples_collected"] += len(batch)
+            logger.debug("Poll of %r returned %d sample(s)", source_name, len(batch))
 
+            remaining = duration_s - (clock() - start)
+            if remaining <= 0 or (stop is not None and stop.is_set()):
+                break
+            sleep(min(interval_s, remaining))
 
-    def stop_harvesting(self):
-        """Signal to stop all live harvesting."""
-        print("Stopping live harvesting...")
-        self._stop_flag.set()
-
-    def _get_source_by_name(self, source_name: str):
-        """Retrieve a registered source by its name."""
-        for source in self.sources:
-            if source.metadata()["source"] == source_name:
-                return source
-        raise ValueError(f"Source {source_name} not found.")
-
-    def _serialize_data(self, source_name: str, file_path: str):
-        """Save collected data to a file."""
-        data = self.collected_data.get(source_name, pd.DataFrame())
-        if data.empty:
-            print(f"No data available for source: {source_name}")
-            return
-
-        try:
-            if file_path.endswith(".csv"):
-                data.to_csv(file_path, index=False)
-            elif file_path.endswith(".parquet"):
-                data.to_parquet(file_path)
-            elif file_path.endswith(".json"):
-                data.to_json(file_path, orient="records")
-            else:
-                raise ValueError(f"Unsupported file format for {file_path}")
-            print(f"Data saved to {file_path}.")
-        except Exception as e:
-            print(f"Error while saving data to {file_path}: {e}")
+        stats = CollectStats(
+            samples=samples,
+            duration_s=clock() - start,
+            started_at=started_at,
+            source=source_name,
+            columns=sorted(columns),
+        )
+        logger.info(
+            "Collected %d sample(s) from %r in %.3fs", stats.samples, source_name, stats.duration_s
+        )
+        return stats

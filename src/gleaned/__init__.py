@@ -1,17 +1,30 @@
+"""gleaned turns live battery data sources into BDF (Battery Data Format) feeds.
+
+Acquisition layer of the open battery-data stack: implement a
+:class:`DataSource`, point a :class:`Harvester` at it, and get conforming
+``.bdf.csv`` files out. Normalisation of exported vendor files is the job
+of the ``batterydf`` package (Battery Data Alliance), not of gleaned.
 """
-Gleaned: A Modular Data Harvesting Framework
 
-Gleaned is a flexible and extensible framework for collecting and managing data 
-from various live and static sources. It supports WMI-based battery data collection, 
-CSV imports, and more, with built-in support for live updates and modular source integration.
-"""
+from importlib.metadata import PackageNotFoundError, version
 
-import pkg_resources
+try:
+    __version__ = version("gleaned")
+except PackageNotFoundError:  # running from a source tree without installation
+    __version__ = "0.2.0"
 
-__version__ = pkg_resources.get_distribution("gleaned").version
+from .harvester import CollectStats, Harvester
+from .protocols import DataSource, Sink
+from .registry import available_sources, create_source
+from .sinks.bdf_csv import BdfCsvSink
 
-# Expose key classes at the package level
-from .harvester import DataHarvester
-from .datasources.base import DataSource
-from .datasources.wmi_source import WMIDataSource
-from .datasources.file_source import FileSource
+__all__ = [
+    "DataSource",
+    "Sink",
+    "Harvester",
+    "CollectStats",
+    "BdfCsvSink",
+    "available_sources",
+    "create_source",
+    "__version__",
+]
