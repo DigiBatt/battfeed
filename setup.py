@@ -29,4 +29,8 @@ setup(
     url="https://github.com/DigiBatt/gleaned",
     author="Simon Clark",
     author_email="your-email@example.com",
+    license="Apache-2.0",
+    classifiers=[
+        "License :: OSI Approved :: Apache Software License",
+    ],
 )
