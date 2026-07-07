@@ -155,7 +155,7 @@ Keeping battfeed small is the point. It deliberately does **not** do:
 - **Upload, fleet management, or multi-tenant services.** battfeed writes local files;
   publishing and sharing belong to registry tooling.
 - **Digital-twin or model logic.** State estimation and twin orchestration live in
-  [`battwin`](https://github.com/DigiBatt/echoed), which consumes battfeed feeds.
+  [`battwin`](https://github.com/DigiBatt/battwin), which consumes battfeed feeds.
 
 ## Development
 

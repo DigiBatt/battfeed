@@ -25,8 +25,8 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/DigiBatt/gleaned"
-Issues = "https://github.com/DigiBatt/gleaned/issues"
+Homepage = "https://github.com/DigiBatt/battfeed"
+Issues = "https://github.com/DigiBatt/battfeed/issues"
 
 [project.optional-dependencies]
 wmi = ["wmi"]
