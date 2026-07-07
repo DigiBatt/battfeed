@@ -8,7 +8,7 @@ the polling loop.
 
 ``bleak`` is imported lazily, so the rest of the integration (protocol, mock
 transport) has no BLE dependency. Install with
-``pip install "gleaned[mc3000-ble]"``.
+``pip install "battfeed[mc3000-ble]"``.
 
 Read-only: requests are built exclusively via ``protocol.build_ble_request``.
 """
@@ -97,7 +97,7 @@ class BleTransport(Transport):
             from bleak import BleakClient  # lazy
         except ImportError as e:  # pragma: no cover
             raise TransportError(
-                'bleak not installed -- run pip install "gleaned[mc3000-ble]"'
+                'bleak not installed -- run pip install "battfeed[mc3000-ble]"'
             ) from e
         self._client = BleakClient(self.address, disconnected_callback=self._on_disconnect)
         await self._client.connect()

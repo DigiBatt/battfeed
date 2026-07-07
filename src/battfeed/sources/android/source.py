@@ -61,7 +61,7 @@ class AndroidBatterySource:
     * ``surface_temperature_celsius`` -- dumpsys ``temperature`` and sysfs
       ``temp`` are tenths of a degree Celsius, converted to degC.
     * ``charge_status`` -- the status string itself (e.g. ``"Charging"``).
-      This is a non-vocabulary string column, permitted by the gleaned
+      This is a non-vocabulary string column, permitted by the battfeed
       sample contract because status changes over time and is analytically
       valuable; note that strict BDF validation flags columns outside the
       canonical vocabulary.
@@ -72,7 +72,7 @@ class AndroidBatterySource:
 
     Resilience: :meth:`poll` RAISES on adb failures and device
     disconnects. The retry/reconnect machinery of the original standalone
-    collector is intentionally not ported -- the gleaned harvester's
+    collector is intentionally not ported -- the battfeed harvester's
     ``ErrorPolicy`` already retries failed polls with exponential backoff,
     so this source stays a thin, raise-on-trouble reader.
 

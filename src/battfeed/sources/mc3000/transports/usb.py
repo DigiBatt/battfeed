@@ -11,7 +11,7 @@ impractical, prefer the BLE transport, or swap this implementation for
 ``hidapi`` (the device is a HID device). This path is a documented fallback --
 verify on hardware.
 
-``pyusb`` is imported lazily. Install with ``pip install "gleaned[mc3000-usb]"``.
+``pyusb`` is imported lazily. Install with ``pip install "battfeed[mc3000-usb]"``.
 
 Read-only: requests are built exclusively via ``protocol.build_usb_request``.
 """
@@ -51,7 +51,7 @@ class UsbTransport(Transport):
             from usb.core import USBError
         except ImportError as e:  # pragma: no cover
             raise TransportError(
-                'pyusb not installed -- run pip install "gleaned[mc3000-usb]"'
+                'pyusb not installed -- run pip install "battfeed[mc3000-usb]"'
             ) from e
         device = usb.core.find(idVendor=self.vid, idProduct=self.pid)
         if device is None:

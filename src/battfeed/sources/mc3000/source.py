@@ -77,7 +77,7 @@ class Mc3000Source:
     uses the device's internal 0-based numbering: ``slot=0`` is the leftmost
     bay, which the unit's display labels channel 1 (``slot=n`` is channel
     ``n + 1``). To collect the second bay from the left, for example, run
-    ``gleaned collect --source mc3000 --opt slot=1 ...`` -- one run per
+    ``battfeed collect --source mc3000 --opt slot=1 ...`` -- one run per
     occupied bay.
 
     Field mapping and unit conversions are documented on
@@ -90,19 +90,19 @@ class Mc3000Source:
     The connection is lazy: nothing talks to the device until the first
     :meth:`poll` (or :meth:`metadata`), and :meth:`close` disconnects
     (idempotent; a later poll reconnects). A transient device failure makes
-    :meth:`poll` raise, which is deliberate -- the gleaned harvester's error
+    :meth:`poll` raise, which is deliberate -- the battfeed harvester's error
     policy owns retry and backoff.
 
     Safety: strictly read-only. Only the read opcodes allowlisted in
-    :mod:`gleaned.sources.mc3000.protocol` can ever be sent; the frame
+    :mod:`battfeed.sources.mc3000.protocol` can ever be sent; the frame
     builders refuse control commands (start/stop/write-settings).
 
     Args:
         slot: Bay to watch, an integer 0-3 (0 = leftmost bay, the device's
             channel 1).
         transport: ``"ble"`` (default; needs ``pip install
-            "gleaned[mc3000-ble]"``), ``"usb"`` (needs ``pip install
-            "gleaned[mc3000-usb]"``) or ``"mock"`` (a built-in simulated
+            "battfeed[mc3000-ble]"``), ``"usb"`` (needs ``pip install
+            "battfeed[mc3000-usb]"``) or ``"mock"`` (a built-in simulated
             charger -- no hardware, no extras).
         address: BLE device address of the charger, e.g.
             ``"AA:BB:CC:DD:EE:FF"``. Required for ``transport="ble"``,
@@ -143,7 +143,7 @@ class Mc3000Source:
             raise ImportError(
                 f"Mc3000Source(transport={transport!r}) needs the optional {module!r} "
                 f"package, which is not installed. Install it with: "
-                f'pip install "gleaned[{extra}]".'
+                f'pip install "battfeed[{extra}]".'
             )
         self.name = "mc3000"
         self._slot = slot
@@ -164,7 +164,7 @@ class Mc3000Source:
         ``mock`` transport works either way.
         """
         missing = [
-            f'{kind.upper()} needs pip install "gleaned[{extra}]"'
+            f'{kind.upper()} needs pip install "battfeed[{extra}]"'
             for kind, (module, extra) in _HW_DEPS.items()
             if not _module_available(module)
         ]
@@ -200,7 +200,7 @@ class Mc3000Source:
 
         ``[]`` means the bay has no cell inserted (the device reports a
         0 mV terminal voltage) or a single frame failed to decode. A
-        :class:`~gleaned.sources.mc3000.transports.base.TransportError` is
+        :class:`~battfeed.sources.mc3000.transports.base.TransportError` is
         raised when the device itself is unreachable, so the harvester's
         error policy can retry with backoff -- no retry loop lives here.
         """

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from gleaned import cli
-from gleaned.sinks.bdf_csv import REQUIRED_COLUMNS
+from battfeed import cli
+from battfeed.sinks.bdf_csv import REQUIRED_COLUMNS
 
 
 def test_sources_subcommand_lists_builtins(capsys):

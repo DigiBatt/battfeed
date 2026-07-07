@@ -10,10 +10,10 @@ from typing import Sequence
 
 import pytest
 
-from gleaned.protocols import DataSource
-from gleaned.sources.android import AndroidBatterySource
-from gleaned.sources.android.adb import ADBCommandError, ADBDeviceDisconnected, ADBError, AdbDevice
-from gleaned.sources.android.source import _signed_current
+from battfeed.protocols import DataSource
+from battfeed.sources.android import AndroidBatterySource
+from battfeed.sources.android.adb import ADBCommandError, ADBDeviceDisconnected, ADBError, AdbDevice
+from battfeed.sources.android.source import _signed_current
 
 DUMPSYS_DISCHARGING = """
 Current Battery Service state:
@@ -111,7 +111,7 @@ def test_poll_returns_one_sample_with_canonical_columns():
     source = AndroidBatterySource(backend=FakeAdbBackend([_device_spec()]))
 
     assert source.name == "android"
-    assert isinstance(source, DataSource)  # structural gleaned contract
+    assert isinstance(source, DataSource)  # structural battfeed contract
 
     samples = source.poll()
     assert len(samples) == 1

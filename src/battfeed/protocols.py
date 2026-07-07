@@ -1,14 +1,14 @@
-"""Public contracts for gleaned data sources and sinks.
+"""Public contracts for battfeed data sources and sinks.
 
-This module is the **stable seam** of gleaned: third-party collectors
+This module is the **stable seam** of battfeed: third-party collectors
 implement :class:`DataSource`, output writers implement :class:`Sink`,
 and everything else in the package is wiring between the two.
 
 Both contracts use :class:`typing.Protocol` (structural typing), so an
-implementation never needs to import or subclass anything from gleaned --
+implementation never needs to import or subclass anything from battfeed --
 any object with the right attributes and methods satisfies the contract.
 This is deliberate: commercial platforms can ship proprietary sources and
-sinks that plug into gleaned without depending on its internals.
+sinks that plug into battfeed without depending on its internals.
 
 Sample shape
 ------------
@@ -48,14 +48,14 @@ class DataSource(Protocol):
     This protocol is the stable seam that third-party collectors implement.
     Implementations are structural: define ``name``, ``metadata()`` and
     ``poll()`` on any class and it *is* a ``DataSource`` -- no import or
-    inheritance required. Register it with a :class:`gleaned.Harvester`
-    directly, or expose it to the ``gleaned`` CLI through the
-    ``"gleaned.sources"`` entry-point group.
+    inheritance required. Register it with a :class:`battfeed.Harvester`
+    directly, or expose it to the ``battfeed`` CLI through the
+    ``"battfeed.sources"`` entry-point group.
 
     Error handling
     --------------
     ``poll()`` MAY raise when the underlying device is briefly unreachable;
-    the harvester's :class:`gleaned.ErrorPolicy` retries with backoff, so
+    the harvester's :class:`battfeed.ErrorPolicy` retries with backoff, so
     sources should NOT implement their own retry loops. A source should
     only swallow errors it can genuinely resolve better itself (e.g. one
     bad frame out of several channels).
@@ -66,7 +66,7 @@ class DataSource(Protocol):
     sessions, and so on; callers invoke it when present. A classmethod
     ``availability() -> str | None`` may report why the source cannot run
     here (missing optional dependency, wrong platform); the CLI uses it to
-    annotate ``gleaned sources``. Neither is part of the required protocol,
+    annotate ``battfeed sources``. Neither is part of the required protocol,
     so trivial sources stay trivial.
     """
 
@@ -103,8 +103,8 @@ class Sink(Protocol):
 
     This protocol is the stable seam that output writers implement -- the
     harvester only ever calls ``write()`` and the owner of the sink calls
-    ``close()`` exactly once when collection is finished. gleaned ships
-    :class:`gleaned.BdfCsvSink`, which writes BDF CSV files; alternative
+    ``close()`` exactly once when collection is finished. battfeed ships
+    :class:`battfeed.BdfCsvSink`, which writes BDF CSV files; alternative
     sinks (message queues, databases, platform ingest APIs) just need these
     two methods.
     """

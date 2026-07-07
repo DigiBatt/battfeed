@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from gleaned import Harvester
+from battfeed import Harvester
 
 
 class StaticSource:

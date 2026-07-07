@@ -1,6 +1,6 @@
-# gleaned
+# battfeed
 
-**gleaned turns live battery data sources into BDF (Battery Data Format) feeds.**
+**battfeed turns live battery data sources into BDF (Battery Data Format) feeds.**
 
 It is the acquisition layer of an open battery-data stack: point it at something that
 produces battery readings — a simulator, a growing instrument log, the battery in your
@@ -13,7 +13,7 @@ stack understands.
                         │
                         │  poll()                (you implement DataSource)
                         ▼
-                     gleaned                     (this package: Harvester + sinks)
+                     battfeed                     (this package: Harvester + sinks)
                         │
                         ▼
         *.bdf.csv  +  *.meta.json                (Battery Data Format files)
@@ -32,16 +32,16 @@ Requires Python >= 3.10.
 ## Install
 
 ```
-pip install gleaned
+pip install battfeed
 ```
 
 | Extra                    | Installs    | Enables                                            |
 | ------------------------ | ----------- | -------------------------------------------------- |
-| `pip install gleaned[wmi]` | `wmi`       | `WmiBatterySource` (Windows laptop/tablet battery) |
-| `pip install gleaned[mc3000-ble]` | `bleak` | `Mc3000Source` over Bluetooth LE (the `mock` transport needs no extra) |
-| `pip install gleaned[mc3000-usb]` | `pyusb` | `Mc3000Source` over USB |
-| `pip install gleaned[bdf]` | `batterydf` | `validate_file()` — check emitted files against the BDF reference implementation |
-| `pip install gleaned[dev]` | `pytest`, `ruff`, `mypy` | development                          |
+| `pip install battfeed[wmi]` | `wmi`       | `WmiBatterySource` (Windows laptop/tablet battery) |
+| `pip install battfeed[mc3000-ble]` | `bleak` | `Mc3000Source` over Bluetooth LE (the `mock` transport needs no extra) |
+| `pip install battfeed[mc3000-usb]` | `pyusb` | `Mc3000Source` over USB |
+| `pip install battfeed[bdf]` | `batterydf` | `validate_file()` — check emitted files against the BDF reference implementation |
+| `pip install battfeed[dev]` | `pytest`, `ruff`, `mypy` | development                          |
 
 The Android source needs no extra — only the `adb` executable (Android
 platform-tools) on your PATH.
@@ -51,7 +51,7 @@ platform-tools) on your PATH.
 Collect from the built-in simulator into a BDF file:
 
 ```python
-from gleaned import BdfCsvSink, Harvester, create_source
+from battfeed import BdfCsvSink, Harvester, create_source
 
 harvester = Harvester()
 harvester.register(create_source("simulator"))
@@ -63,7 +63,7 @@ sink.close()  # finalises the CSV and writes the .meta.json sidecar
 Or from the command line (Ctrl-C stops gracefully and finalises the files):
 
 ```
-gleaned collect --source simulator --duration 10 --interval 1 --institution LOCAL --cell DemoCell
+battfeed collect --source simulator --duration 10 --interval 1 --institution LOCAL --cell DemoCell
 ```
 
 Omit `--duration` to collect until Ctrl-C — the mode field collectors run in.
@@ -71,12 +71,12 @@ Source constructor options are passed with repeatable `--opt KEY=VALUE` flags
 (values are parsed as JSON when possible):
 
 ```
-gleaned collect --source mc3000 --opt slot=1 --opt transport=ble --cell AA-Bay2
-gleaned collect --source android --opt serial=R58M12ABC --interval 5
-gleaned collect --source csvtail --opt path=instr.log --opt 'column_map={"V":"voltage_volt","I":"current_ampere"}'
+battfeed collect --source mc3000 --opt slot=1 --opt transport=ble --cell AA-Bay2
+battfeed collect --source android --opt serial=R58M12ABC --interval 5
+battfeed collect --source csvtail --opt path=instr.log --opt 'column_map={"V":"voltage_volt","I":"current_ampere"}'
 ```
 
-`gleaned sources` lists everything available — including sources contributed by
+`battfeed sources` lists everything available — including sources contributed by
 other installed packages — with each source's options, and marks unavailable
 ones (e.g. `wmi` off-Windows, `mc3000` without its transport extra).
 
@@ -85,7 +85,7 @@ ones (e.g. `wmi` off-Windows, `mc3000` without its transport extra).
 A conforming BDF CSV with snake_case `{quantity}_{unit}` headers. The required trio
 `test_time_second, voltage_volt, current_ampere` always leads the header, followed by
 any extra columns in alphabetical order. Files are named
-`InstitutionCode__CellName__YYYYMMDD_XXX.bdf.csv` (see `gleaned.sinks.bdf_csv.dataset_filename`).
+`InstitutionCode__CellName__YYYYMMDD_XXX.bdf.csv` (see `battfeed.sinks.bdf_csv.dataset_filename`).
 
 **Sign convention** (per the BDF specification): positive current charges the test
 object, negative current discharges it. Power follows the same sign.
@@ -95,8 +95,8 @@ with the elapsed collection time.
 
 ## Writing your own source
 
-`gleaned.DataSource` is a `typing.Protocol` — the stable seam third-party collectors
-implement. No imports from gleaned are needed; any object with `name`, `metadata()` and
+`battfeed.DataSource` is a `typing.Protocol` — the stable seam third-party collectors
+implement. No imports from battfeed are needed; any object with `name`, `metadata()` and
 `poll()` qualifies:
 
 ```python
@@ -113,17 +113,17 @@ class MyCyclerSource:
         return [{"voltage_volt": reading.volts, "current_ampere": reading.amps}]
 ```
 
-Register it with a `Harvester` directly, or expose it to the `gleaned` CLI from your
+Register it with a `Harvester` directly, or expose it to the `battfeed` CLI from your
 own package via an entry point:
 
 ```toml
-[project.entry-points."gleaned.sources"]
+[project.entry-points."battfeed.sources"]
 my-cycler = "my_pkg.sources:MyCyclerSource"
 ```
 
 Sources may optionally define `close()` to release hardware handles, and an
 `availability()` classmethod to explain why they cannot run here (missing extra,
-wrong platform); gleaned uses both when present. See `examples/custom_source.py`
+wrong platform); battfeed uses both when present. See `examples/custom_source.py`
 for a runnable version.
 
 **Keep sources simple: raise on trouble.** When the device is unreachable,
@@ -140,22 +140,22 @@ field collection survive flaky Bluetooth and USB.
 | ----------- | -------------------- | ---------------------------------------------------------------------------- |
 | `simulator` | `SimulatedCellSource` | Deterministic synthetic CR2032-ish discharge; ideal for demos and tests.    |
 | `csvtail`   | `CsvTailSource`       | Tails a growing CSV log; you supply the column map and unit scale factors.  |
-| `wmi`       | `WmiBatterySource`    | Polls the local Windows battery via WMI (`gleaned[wmi]`, Windows only).     |
+| `wmi`       | `WmiBatterySource`    | Polls the local Windows battery via WMI (`battfeed[wmi]`, Windows only).     |
 | `mc3000`    | `Mc3000Source`        | SkyRC MC3000 charger/analyzer, one slot per instance, over BLE/USB (or a built-in mock transport for demos). |
 | `android`   | `AndroidBatterySource` | Android device battery via `adb` (dumpsys + sysfs); pure stdlib.           |
 
 ## Non-goals
 
-Keeping gleaned small is the point. It deliberately does **not** do:
+Keeping battfeed small is the point. It deliberately does **not** do:
 
 - **Vendor-file normalization.** Parsing and harmonising exported Neware / BioLogic /
   Digatron / Basytec / ... files is the job of
   [`batterydf`](https://github.com/battery-data-alliance) (Battery Data Alliance).
   `CsvTailSource` is config-driven on purpose — it will never guess column synonyms.
-- **Upload, fleet management, or multi-tenant services.** gleaned writes local files;
+- **Upload, fleet management, or multi-tenant services.** battfeed writes local files;
   publishing and sharing belong to registry tooling.
 - **Digital-twin or model logic.** State estimation and twin orchestration live in
-  [`echoed`](https://github.com/DigiBatt/echoed), which consumes gleaned feeds.
+  [`battwin`](https://github.com/DigiBatt/echoed), which consumes battfeed feeds.
 
 ## Development
 

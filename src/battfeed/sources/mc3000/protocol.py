@@ -180,7 +180,7 @@ class SlotReading:
     Units are as the device reports them: voltage in mV, current magnitude in
     mA, capacity in mAh, temperature in whole degrees (unit per machine
     settings, Celsius by default), resistance in mOhm. Sign and unit conversion
-    to canonical BDF columns happens in :mod:`gleaned.sources.mc3000.source`.
+    to canonical BDF columns happens in :mod:`battfeed.sources.mc3000.source`.
     """
 
     slot: int

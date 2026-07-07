@@ -6,8 +6,8 @@ import threading
 
 import pytest
 
-from gleaned import ErrorPolicy, Harvester, SourceFailure
-from gleaned.cli import _parse_opts
+from battfeed import ErrorPolicy, Harvester, SourceFailure
+from battfeed.cli import _parse_opts
 
 
 class FlakySource:

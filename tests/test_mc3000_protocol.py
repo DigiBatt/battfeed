@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from gleaned.sources.mc3000 import protocol as p
+from battfeed.sources.mc3000 import protocol as p
 
 
 def _known_progress_frame() -> bytes:

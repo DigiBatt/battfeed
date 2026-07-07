@@ -1,17 +1,17 @@
-"""A minimal third-party data source implementing the gleaned DataSource protocol.
+"""A minimal third-party data source implementing the battfeed DataSource protocol.
 
-Note that RampSource imports nothing from gleaned: the protocol is structural
+Note that RampSource imports nothing from battfeed: the protocol is structural
 (typing.Protocol), so `name`, `metadata()` and `poll()` are all it takes. A real
 collector would talk to hardware inside poll(); this one just ramps a voltage.
 
-To make a packaged source discoverable by `gleaned sources` / `create_source`,
+To make a packaged source discoverable by `battfeed sources` / `create_source`,
 declare an entry point in your own pyproject.toml:
 
-    [project.entry-points."gleaned.sources"]
+    [project.entry-points."battfeed.sources"]
     ramp = "my_pkg.sources:RampSource"
 """
 
-from gleaned import BdfCsvSink, Harvester
+from battfeed import BdfCsvSink, Harvester
 
 
 class RampSource:
@@ -32,7 +32,7 @@ class RampSource:
             }
         ]
 
-    def close(self):  # optional hook; gleaned calls it when present
+    def close(self):  # optional hook; battfeed calls it when present
         print("RampSource closed")
 
 

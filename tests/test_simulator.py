@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from gleaned.sources.simulator import SimulatedCellSource
+from battfeed.sources.simulator import SimulatedCellSource
 
 
 def test_simulator_is_deterministic():

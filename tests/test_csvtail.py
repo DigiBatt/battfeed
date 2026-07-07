@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from gleaned.sources.csvtail import CsvTailSource
+from battfeed.sources.csvtail import CsvTailSource
 
 COLUMN_MAP = {
     "Time/s": "test_time_second",

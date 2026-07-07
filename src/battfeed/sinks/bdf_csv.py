@@ -5,7 +5,7 @@ BDF files use snake_case machine-readable headers of the form
 ``test_time_second``, ``voltage_volt`` and ``current_ampere``.
 
 Sign convention (per the Battery Data Format specification, and used
-throughout gleaned): **positive current charges the test object (current
+throughout battfeed): **positive current charges the test object (current
 flows into it); negative current discharges it.** Power follows the same
 sign as current.
 """
@@ -70,7 +70,7 @@ class BdfCsvSink:
 
     On :meth:`close`, a sidecar ``<name>.meta.json`` (the ``.bdf.csv``
     suffix replaced) is written next to the data file, containing the
-    ``metadata`` mapping plus the started/finished timestamps, the gleaned
+    ``metadata`` mapping plus the started/finished timestamps, the battfeed
     version, the column list and the row count.
 
     Args:
@@ -167,14 +167,14 @@ class BdfCsvSink:
         return self._path.with_name(stem + ".meta.json")
 
     def _write_sidecar(self) -> None:
-        from gleaned import __version__  # local import to avoid a cycle at module load
+        from battfeed import __version__  # local import to avoid a cycle at module load
 
         sidecar = {
             "file": self._path.name,
             "metadata": self._metadata,
             "started_at": self._started_at,
             "finished_at": self._utcnow(),
-            "gleaned_version": __version__,
+            "battfeed_version": __version__,
             "columns": self._columns or [],
             "rows": self._rows_written,
         }
@@ -187,13 +187,13 @@ def validate_file(path: str | Path) -> dict[str, Any]:
     """Validate an emitted file with the ``batterydf`` package (optional extra).
 
     Returns the validation report dict from ``bdf.validate`` (it contains at
-    least an ``"ok"`` boolean). gleaned itself never parses or normalises
+    least an ``"ok"`` boolean). battfeed itself never parses or normalises
     vendor data; this simply hands the finished file to the reference
     implementation of the format.
 
     Raises:
         ImportError: if ``batterydf`` is not installed -- install it with
-            ``pip install "gleaned[bdf]"``.
+            ``pip install "battfeed[bdf]"``.
         RuntimeError: if ``batterydf`` fails while validating the file.
     """
     try:
@@ -201,7 +201,7 @@ def validate_file(path: str | Path) -> dict[str, Any]:
     except ImportError as exc:
         raise ImportError(
             "validate_file needs the optional 'batterydf' package, which is "
-            'not installed. Install it with: pip install "gleaned[bdf]".'
+            'not installed. Install it with: pip install "battfeed[bdf]".'
         ) from exc
     try:
         report = bdf.validate(str(path))

@@ -27,7 +27,7 @@ class CsvTailSource:
     converts its unit. It is not a synonym-guessing or vendor-format engine
     -- normalising exported vendor files (Neware, BioLogic, Digatron, ...)
     is the job of the ``batterydf`` package (Battery Data Alliance), not of
-    gleaned.
+    battfeed.
 
     Args:
         path: CSV file to follow. May not exist yet; polls return no samples

@@ -6,8 +6,8 @@ import sys
 
 import pytest
 
-from gleaned import BdfCsvSink, __version__
-from gleaned.sinks.bdf_csv import dataset_filename, validate_file
+from battfeed import BdfCsvSink, __version__
+from battfeed.sinks.bdf_csv import dataset_filename, validate_file
 
 
 def test_header_leads_with_required_trio_then_sorted_extras(tmp_path):
@@ -46,7 +46,7 @@ def test_sidecar_written_on_close(tmp_path):
     assert sidecar.exists()
     payload = json.loads(sidecar.read_text(encoding="utf-8"))
     assert payload["metadata"] == {"operator": "demo", "institution": "TEST"}
-    assert payload["gleaned_version"] == __version__
+    assert payload["battfeed_version"] == __version__
     assert payload["rows"] == 1
     assert payload["columns"][:3] == ["test_time_second", "voltage_volt", "current_ampere"]
     datetime.datetime.fromisoformat(payload["started_at"])
@@ -79,5 +79,5 @@ def test_dataset_filename_follows_bdf_convention():
 
 def test_validate_file_explains_missing_bdf_extra(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "bdf", None)  # force `import bdf` to fail
-    with pytest.raises(ImportError, match=r"gleaned\[bdf\]"):
+    with pytest.raises(ImportError, match=r"battfeed\[bdf\]"):
         validate_file(tmp_path / "whatever.bdf.csv")

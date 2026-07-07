@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from gleaned import available_sources, create_source
-from gleaned.sources.simulator import SimulatedCellSource
+from battfeed import available_sources, create_source
+from battfeed.sources.simulator import SimulatedCellSource
 
 
 def test_builtin_sources_are_listed():

@@ -2,16 +2,16 @@
 
 Sources are found in two places:
 
-1. The built-in sources shipped with gleaned (simulator, csvtail, wmi).
-2. The ``"gleaned.sources"`` entry-point group, which any installed package
+1. The built-in sources shipped with battfeed (simulator, csvtail, wmi).
+2. The ``"battfeed.sources"`` entry-point group, which any installed package
    can contribute to::
 
-       [project.entry-points."gleaned.sources"]
+       [project.entry-points."battfeed.sources"]
        my-cycler = "my_pkg.sources:MyCyclerSource"
 
-gleaned registers its own built-ins through the same entry-point group (see
+battfeed registers its own built-ins through the same entry-point group (see
 ``pyproject.toml``), so the plugin mechanism is exercised on every install;
-the built-in table below only guarantees discovery when gleaned is imported
+the built-in table below only guarantees discovery when battfeed is imported
 from a source tree without being installed.
 """
 
@@ -27,11 +27,11 @@ logger = logging.getLogger(__name__)
 
 #: Built-in sources, as "module:ClassName" targets (same format as entry points).
 _BUILTINS: dict[str, str] = {
-    "simulator": "gleaned.sources.simulator:SimulatedCellSource",
-    "csvtail": "gleaned.sources.csvtail:CsvTailSource",
-    "wmi": "gleaned.sources.wmi_battery:WmiBatterySource",
-    "mc3000": "gleaned.sources.mc3000:Mc3000Source",
-    "android": "gleaned.sources.android:AndroidBatterySource",
+    "simulator": "battfeed.sources.simulator:SimulatedCellSource",
+    "csvtail": "battfeed.sources.csvtail:CsvTailSource",
+    "wmi": "battfeed.sources.wmi_battery:WmiBatterySource",
+    "mc3000": "battfeed.sources.mc3000:Mc3000Source",
+    "android": "battfeed.sources.android:AndroidBatterySource",
 }
 
 
@@ -53,13 +53,13 @@ def available_sources() -> dict[str, type]:
             found[name] = _load(target)
         except Exception:  # pragma: no cover - only hit with a broken install
             logger.warning("Skipping broken built-in source %r (%s)", name, target)
-    for ep in entry_points(group="gleaned.sources"):
+    for ep in entry_points(group="battfeed.sources"):
         if ep.name in found:
-            continue  # built-ins win; also dedupes gleaned's own entry points
+            continue  # built-ins win; also dedupes battfeed's own entry points
         try:
             found[ep.name] = ep.load()
         except Exception:  # pragma: no cover - depends on installed plugins
-            logger.warning("Skipping broken 'gleaned.sources' entry point %r", ep.name)
+            logger.warning("Skipping broken 'battfeed.sources' entry point %r", ep.name)
     return found
 
 

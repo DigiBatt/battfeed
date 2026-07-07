@@ -1,17 +1,17 @@
-"""gleaned turns live battery data sources into BDF (Battery Data Format) feeds.
+"""battfeed turns live battery data sources into BDF (Battery Data Format) feeds.
 
 Acquisition layer of the open battery-data stack: implement a
 :class:`DataSource`, point a :class:`Harvester` at it, and get conforming
 ``.bdf.csv`` files out. Normalisation of exported vendor files is the job
-of the ``batterydf`` package (Battery Data Alliance), not of gleaned.
+of the ``batterydf`` package (Battery Data Alliance), not of battfeed.
 """
 
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("gleaned")
+    __version__ = version("battfeed")
 except PackageNotFoundError:  # running from a source tree without installation
-    __version__ = "0.3.0"
+    __version__ = "0.4.0"
 
 from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure
 from .protocols import DataSource, Sample, SampleValue, Sink

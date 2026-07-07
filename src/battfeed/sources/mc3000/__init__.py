@@ -1,4 +1,4 @@
-"""SkyRC MC3000 charger/analyzer as a gleaned data source (read-only).
+"""SkyRC MC3000 charger/analyzer as a battfeed data source (read-only).
 
 Importing this package is cheap: the hardware libraries (``bleak`` for BLE,
 ``pyusb`` for USB) are only imported when a hardware transport actually

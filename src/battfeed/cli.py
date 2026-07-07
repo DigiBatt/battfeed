@@ -1,4 +1,4 @@
-"""Command-line interface: ``gleaned sources`` and ``gleaned collect``."""
+"""Command-line interface: ``battfeed sources`` and ``battfeed collect``."""
 
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="gleaned",
+        prog="battfeed",
         description="Turn live battery data sources into BDF (Battery Data Format) feeds.",
     )
-    from gleaned import __version__
+    from battfeed import __version__
 
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
@@ -38,7 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("sources", help="list available data sources")
 
     collect = subparsers.add_parser("collect", help="poll a source and write a .bdf.csv file")
-    collect.add_argument("--source", required=True, help="source name (see 'gleaned sources')")
+    collect.add_argument("--source", required=True, help="source name (see 'battfeed sources')")
     collect.add_argument(
         "--duration",
         type=float,
@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="source constructor option, repeatable (values parsed as JSON when "
         "possible, e.g. --opt slot=2 --opt path='\"log.csv\"' --opt "
         'column_map=\'{"V":"voltage_volt"}\'); '
-        "see 'gleaned sources' for each source's options",
+        "see 'battfeed sources' for each source's options",
     )
     collect.add_argument(
         "--out",
@@ -158,7 +158,7 @@ def _cmd_collect(args: argparse.Namespace) -> int:
         print(
             f"error: bad options for source {args.source!r}: {exc}\n"
             "Pass constructor options with --opt KEY=VALUE "
-            "(see 'gleaned sources' for each source's options).",
+            "(see 'battfeed sources' for each source's options).",
             file=sys.stderr,
         )
         return 2

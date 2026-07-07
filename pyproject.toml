@@ -3,15 +3,15 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gleaned"
-version = "0.3.0"
+name = "battfeed"
+version = "0.4.0"
 description = "Turn live battery data sources into BDF feeds"
 readme = "README.md"
 authors = [{ name = "Simon Clark" }]
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = []
-keywords = ["battery", "bdf", "battery-data-format", "data-acquisition", "digibatt"]
+keywords = ["battery", "bdf", "battery-data-format", "data-acquisition", "digibatt", "battfeed"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
@@ -36,16 +36,16 @@ bdf = ["batterydf"]
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
-gleaned = "gleaned.cli:main"
+battfeed = "battfeed.cli:main"
 
 # The built-in sources are registered through the same entry-point group that
-# third-party packages use, so the plugin mechanism is exercised by gleaned itself.
-[project.entry-points."gleaned.sources"]
-simulator = "gleaned.sources.simulator:SimulatedCellSource"
-csvtail = "gleaned.sources.csvtail:CsvTailSource"
-wmi = "gleaned.sources.wmi_battery:WmiBatterySource"
-mc3000 = "gleaned.sources.mc3000:Mc3000Source"
-android = "gleaned.sources.android:AndroidBatterySource"
+# third-party packages use, so the plugin mechanism is exercised by battfeed itself.
+[project.entry-points."battfeed.sources"]
+simulator = "battfeed.sources.simulator:SimulatedCellSource"
+csvtail = "battfeed.sources.csvtail:CsvTailSource"
+wmi = "battfeed.sources.wmi_battery:WmiBatterySource"
+mc3000 = "battfeed.sources.mc3000:Mc3000Source"
+android = "battfeed.sources.android:AndroidBatterySource"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -4,7 +4,7 @@ This is the read-only harvesting core: it polls a slot's real-time measurement
 frame and decodes it. A *decode* failure for a single slot is swallowed
 (returned as ``None``) so one malformed frame never stops a run; a *transport*
 failure (device unreachable, timeout) propagates, because retry/backoff is the
-caller's job -- in gleaned that is the harvester's ``ErrorPolicy``.
+caller's job -- in battfeed that is the harvester's ``ErrorPolicy``.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class Mc3000Reader:
     def read_slot(self, slot: int) -> SlotReading | None:
         """Poll and decode one slot; ``None`` on a decode failure.
 
-        :class:`~gleaned.sources.mc3000.transports.base.TransportError` is NOT
+        :class:`~battfeed.sources.mc3000.transports.base.TransportError` is NOT
         caught here: a dead link must surface to the caller's error policy
         instead of masquerading as an empty reading.
         """

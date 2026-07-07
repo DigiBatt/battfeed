@@ -7,15 +7,15 @@ import sys
 
 import pytest
 
-from gleaned.sources.mc3000 import Mc3000Source
-from gleaned.sources.mc3000 import source as source_mod
-from gleaned.sources.mc3000.protocol import (
+from battfeed.sources.mc3000 import Mc3000Source
+from battfeed.sources.mc3000 import source as source_mod
+from battfeed.sources.mc3000.protocol import (
     STATUS_CHARGING,
     STATUS_DISCHARGING,
     SlotReading,
 )
-from gleaned.sources.mc3000.source import sample_from_reading
-from gleaned.sources.mc3000.transports.base import Transport, TransportError
+from battfeed.sources.mc3000.source import sample_from_reading
+from battfeed.sources.mc3000.transports.base import Transport, TransportError
 
 #: Default (time_base="collection"): no test_time_second -- the harvester stamps it.
 BDF_KEYS = {
@@ -86,8 +86,8 @@ def test_import_and_availability_do_not_pull_hardware_libs():
 def test_availability_names_the_extras_when_deps_missing(monkeypatch):
     monkeypatch.setattr(source_mod, "_module_available", lambda name: False)
     reason = Mc3000Source.availability()
-    assert "gleaned[mc3000-ble]" in reason
-    assert "gleaned[mc3000-usb]" in reason
+    assert "battfeed[mc3000-ble]" in reason
+    assert "battfeed[mc3000-usb]" in reason
     assert "mock" in reason  # the mock transport works without the extras
 
 
@@ -115,9 +115,9 @@ def test_constructor_validates_slot_and_transport():
 
 def test_hardware_transports_require_optional_deps(monkeypatch):
     monkeypatch.setattr(source_mod, "_module_available", lambda name: False)
-    with pytest.raises(ImportError, match=r"gleaned\[mc3000-ble\]"):
+    with pytest.raises(ImportError, match=r"battfeed\[mc3000-ble\]"):
         Mc3000Source(transport="ble", address="AA:BB:CC:DD:EE:FF")
-    with pytest.raises(ImportError, match=r"gleaned\[mc3000-usb\]"):
+    with pytest.raises(ImportError, match=r"battfeed\[mc3000-usb\]"):
         Mc3000Source(transport="usb")
 
 

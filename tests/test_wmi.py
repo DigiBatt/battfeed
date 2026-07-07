@@ -4,12 +4,12 @@ import sys
 
 import pytest
 
-from gleaned.sources.wmi_battery import WmiBatterySource
+from battfeed.sources.wmi_battery import WmiBatterySource
 
 
 def test_missing_wmi_dependency_raises_helpful_importerror(monkeypatch):
     monkeypatch.setitem(sys.modules, "wmi", None)  # force `import wmi` to fail
-    with pytest.raises(ImportError, match=r"gleaned\[wmi\]"):
+    with pytest.raises(ImportError, match=r"battfeed\[wmi\]"):
         WmiBatterySource()
 
 

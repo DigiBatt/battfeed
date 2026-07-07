@@ -104,7 +104,7 @@ class Harvester:
         sink.close()
 
     The harvester never closes the sink and never closes the source: their
-    owner (your script, or the gleaned CLI) does. This keeps repeated
+    owner (your script, or the battfeed CLI) does. This keeps repeated
     collections against the same source or sink possible.
     """
 

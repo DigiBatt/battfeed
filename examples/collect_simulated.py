@@ -2,8 +2,8 @@
 
 import datetime
 
-from gleaned import BdfCsvSink, Harvester, create_source
-from gleaned.sinks.bdf_csv import dataset_filename
+from battfeed import BdfCsvSink, Harvester, create_source
+from battfeed.sinks.bdf_csv import dataset_filename
 
 harvester = Harvester()
 harvester.register(create_source("simulator"))

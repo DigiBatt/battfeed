@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from gleaned.sources.android.parser import (
+from battfeed.sources.android.parser import (
     battery_health,
     battery_status,
     dumpsys_soc_pct,

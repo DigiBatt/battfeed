@@ -2,7 +2,7 @@
 
 A transport knows how to (a) build a request frame in its own framing (BLE vs
 USB) and (b) exchange it with the device, returning the raw response frame. All
-protocol *meaning* lives in :mod:`gleaned.sources.mc3000.protocol`; a transport
+protocol *meaning* lives in :mod:`battfeed.sources.mc3000.protocol`; a transport
 only moves bytes. Because request frames are built exclusively through the
 read-only builders in ``protocol``, a transport physically cannot emit a
 control command.
