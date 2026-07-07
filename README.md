@@ -38,8 +38,13 @@ pip install gleaned
 | Extra                    | Installs    | Enables                                            |
 | ------------------------ | ----------- | -------------------------------------------------- |
 | `pip install gleaned[wmi]` | `wmi`       | `WmiBatterySource` (Windows laptop/tablet battery) |
+| `pip install gleaned[mc3000-ble]` | `bleak` | `Mc3000Source` over Bluetooth LE (the `mock` transport needs no extra) |
+| `pip install gleaned[mc3000-usb]` | `pyusb` | `Mc3000Source` over USB |
 | `pip install gleaned[bdf]` | `batterydf` | `validate_file()` — check emitted files against the BDF reference implementation |
 | `pip install gleaned[dev]` | `pytest`, `ruff`, `mypy` | development                          |
+
+The Android source needs no extra — only the `adb` executable (Android
+platform-tools) on your PATH.
 
 ## Quickstart
 
@@ -61,8 +66,19 @@ Or from the command line (Ctrl-C stops gracefully and finalises the files):
 gleaned collect --source simulator --duration 10 --interval 1 --institution LOCAL --cell DemoCell
 ```
 
-`gleaned sources` lists everything available, including sources contributed by other
-installed packages, and marks unavailable ones (e.g. `wmi` off-Windows).
+Omit `--duration` to collect until Ctrl-C — the mode field collectors run in.
+Source constructor options are passed with repeatable `--opt KEY=VALUE` flags
+(values are parsed as JSON when possible):
+
+```
+gleaned collect --source mc3000 --opt slot=1 --opt transport=ble --cell AA-Bay2
+gleaned collect --source android --opt serial=R58M12ABC --interval 5
+gleaned collect --source csvtail --opt path=instr.log --opt 'column_map={"V":"voltage_volt","I":"current_ampere"}'
+```
+
+`gleaned sources` lists everything available — including sources contributed by
+other installed packages — with each source's options, and marks unavailable
+ones (e.g. `wmi` off-Windows, `mc3000` without its transport extra).
 
 ## What comes out
 
@@ -105,8 +121,18 @@ own package via an entry point:
 my-cycler = "my_pkg.sources:MyCyclerSource"
 ```
 
-Sources may optionally define `close()` to release hardware handles; gleaned calls it
-when present. See `examples/custom_source.py` for a runnable version.
+Sources may optionally define `close()` to release hardware handles, and an
+`availability()` classmethod to explain why they cannot run here (missing extra,
+wrong platform); gleaned uses both when present. See `examples/custom_source.py`
+for a runnable version.
+
+**Keep sources simple: raise on trouble.** When the device is unreachable,
+`poll()` should raise — the `Harvester` retries with exponential backoff under a
+configurable `ErrorPolicy` and only abandons the run (raising `SourceFailure`)
+after too many *consecutive* failures. Sources should not implement their own
+retry loops; only swallow errors you can genuinely resolve better yourself
+(e.g. one bad frame out of several channels). This is what makes multi-day
+field collection survive flaky Bluetooth and USB.
 
 ## Built-in sources
 
@@ -115,6 +141,8 @@ when present. See `examples/custom_source.py` for a runnable version.
 | `simulator` | `SimulatedCellSource` | Deterministic synthetic CR2032-ish discharge; ideal for demos and tests.    |
 | `csvtail`   | `CsvTailSource`       | Tails a growing CSV log; you supply the column map and unit scale factors.  |
 | `wmi`       | `WmiBatterySource`    | Polls the local Windows battery via WMI (`gleaned[wmi]`, Windows only).     |
+| `mc3000`    | `Mc3000Source`        | SkyRC MC3000 charger/analyzer, one slot per instance, over BLE/USB (or a built-in mock transport for demos). |
+| `android`   | `AndroidBatterySource` | Android device battery via `adb` (dumpsys + sysfs); pure stdlib.           |
 
 ## Non-goals
 

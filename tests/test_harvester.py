@@ -58,8 +58,12 @@ def test_collect_preserves_source_supplied_time(fake_clock, list_sink):
 
     harvester = make_harvester(TimedSource())
     harvester.collect(
-        "timed", duration_s=1.0, interval_s=1.0, sink=list_sink,
-        clock=fake_clock, sleep=fake_clock.sleep,
+        "timed",
+        duration_s=1.0,
+        interval_s=1.0,
+        sink=list_sink,
+        clock=fake_clock,
+        sleep=fake_clock.sleep,
     )
     assert list_sink.rows[0]["test_time_second"] == 42.5
 
@@ -78,8 +82,13 @@ def test_collect_stops_on_stop_event(fake_clock, list_sink):
 
     harvester = make_harvester(StoppingSource())
     stats = harvester.collect(
-        "stopping", duration_s=1000.0, interval_s=1.0, sink=list_sink,
-        clock=fake_clock, sleep=fake_clock.sleep, stop=stop,
+        "stopping",
+        duration_s=1000.0,
+        interval_s=1.0,
+        sink=list_sink,
+        clock=fake_clock,
+        sleep=fake_clock.sleep,
+        stop=stop,
     )
     assert stats.samples == 2
     assert fake_clock.now < 3  # ended long before the nominal duration
@@ -89,8 +98,11 @@ def test_collect_unknown_source_raises_keyerror(fake_clock, list_sink):
     harvester = make_harvester()
     with pytest.raises(KeyError, match="No source registered"):
         harvester.collect(
-            "missing", duration_s=1.0, sink=list_sink,
-            clock=fake_clock, sleep=fake_clock.sleep,
+            "missing",
+            duration_s=1.0,
+            sink=list_sink,
+            clock=fake_clock,
+            sleep=fake_clock.sleep,
         )
 
 
@@ -107,8 +119,12 @@ def test_status_reflects_registration_and_collection(fake_clock, list_sink):
     assert "static" in harvester.sources
 
     harvester.collect(
-        "static", duration_s=2.0, interval_s=1.0, sink=list_sink,
-        clock=fake_clock, sleep=fake_clock.sleep,
+        "static",
+        duration_s=2.0,
+        interval_s=1.0,
+        sink=list_sink,
+        clock=fake_clock,
+        sleep=fake_clock.sleep,
     )
     status = harvester.status("static")
     assert status["samples_collected"] == 2
@@ -118,8 +134,12 @@ def test_status_reflects_registration_and_collection(fake_clock, list_sink):
 def test_collect_stats_reports_source_columns_and_start(fake_clock, list_sink):
     harvester = make_harvester()
     stats = harvester.collect(
-        "static", duration_s=1.0, interval_s=1.0, sink=list_sink,
-        clock=fake_clock, sleep=fake_clock.sleep,
+        "static",
+        duration_s=1.0,
+        interval_s=1.0,
+        sink=list_sink,
+        clock=fake_clock,
+        sleep=fake_clock.sleep,
     )
     assert stats.source == "static"
     assert stats.columns == ["current_ampere", "test_time_second", "voltage_volt"]

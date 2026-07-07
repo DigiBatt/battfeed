@@ -1,0 +1,225 @@
+"""Mc3000Source tests -- mock transport only: no hardware, no bleak/pyusb."""
+
+from __future__ import annotations
+
+import json
+import sys
+
+import pytest
+
+from gleaned.sources.mc3000 import Mc3000Source
+from gleaned.sources.mc3000 import source as source_mod
+from gleaned.sources.mc3000.protocol import (
+    STATUS_CHARGING,
+    STATUS_DISCHARGING,
+    SlotReading,
+)
+from gleaned.sources.mc3000.source import sample_from_reading
+from gleaned.sources.mc3000.transports.base import Transport, TransportError
+
+BDF_KEYS = {
+    "test_time_second",
+    "voltage_volt",
+    "current_ampere",
+    "cumulative_capacity_ah",
+    "surface_temperature_celsius",
+}
+
+
+def _reading(**overrides) -> SlotReading:
+    base = dict(
+        slot=0,
+        battery_type_code=0,
+        mode_code=3,
+        program_count=0,
+        status_code=STATUS_DISCHARGING,
+        elapsed_s=3600,
+        voltage_mv=3700,
+        current_ma=1500,
+        capacity_mah=1234,
+        temperature=27,
+        resistance_mohm=40,
+        led_bits=0,
+    )
+    base.update(overrides)
+    return SlotReading(**base)
+
+
+class _DeadTransport(Transport):
+    """Opens fine, then every poll fails -- an unreachable device."""
+
+    def open(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def poll(self, cmd: int, slot: int) -> bytes:
+        raise TransportError("device gone")
+
+
+class _NoOpenTransport(Transport):
+    """A device that cannot even be connected to."""
+
+    def open(self) -> None:
+        raise TransportError("no device found")
+
+    def close(self) -> None:
+        pass
+
+    def poll(self, cmd: int, slot: int) -> bytes:  # pragma: no cover - never reached
+        raise TransportError("not open")
+
+
+# --- import hygiene and availability ----------------------------------------
+def test_import_and_availability_do_not_pull_hardware_libs():
+    result = Mc3000Source.availability()
+    assert result is None or isinstance(result, str)
+    # The package import (at the top of this module) and availability() must
+    # both work without bleak/pyusb ever being imported.
+    assert "bleak" not in sys.modules
+    assert "usb" not in sys.modules
+
+
+def test_availability_names_the_extras_when_deps_missing(monkeypatch):
+    monkeypatch.setattr(source_mod, "_module_available", lambda name: False)
+    reason = Mc3000Source.availability()
+    assert "gleaned[mc3000-ble]" in reason
+    assert "gleaned[mc3000-usb]" in reason
+    assert "mock" in reason  # the mock transport works without the extras
+
+
+def test_availability_is_none_when_deps_present(monkeypatch):
+    monkeypatch.setattr(source_mod, "_module_available", lambda name: True)
+    assert Mc3000Source.availability() is None
+
+
+# --- construction ------------------------------------------------------------
+def test_constructor_validates_slot_and_transport():
+    assert Mc3000Source(transport="mock").name == "mc3000"
+    with pytest.raises(ValueError, match="slot"):
+        Mc3000Source(slot=4, transport="mock")
+    with pytest.raises(ValueError, match="slot"):
+        Mc3000Source(slot=-1, transport="mock")
+    with pytest.raises(ValueError, match="slot"):
+        Mc3000Source(slot="1", transport="mock")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="transport"):
+        Mc3000Source(transport="serial")
+    with pytest.raises(ValueError, match="address"):
+        Mc3000Source(transport="ble")  # BLE needs an address, checked before deps
+
+
+def test_hardware_transports_require_optional_deps(monkeypatch):
+    monkeypatch.setattr(source_mod, "_module_available", lambda name: False)
+    with pytest.raises(ImportError, match=r"gleaned\[mc3000-ble\]"):
+        Mc3000Source(transport="ble", address="AA:BB:CC:DD:EE:FF")
+    with pytest.raises(ImportError, match=r"gleaned\[mc3000-usb\]"):
+        Mc3000Source(transport="usb")
+
+
+# --- unit conversion and sign convention (known readings) --------------------
+def test_units_and_discharge_sign_on_known_reading():
+    sample = sample_from_reading(_reading())  # discharging: 3700 mV, 1500 mA, 1234 mAh
+    assert set(sample) == BDF_KEYS
+    assert sample["voltage_volt"] == 3.7
+    assert sample["current_ampere"] == -1.5  # discharge -> negative (BDF)
+    assert sample["cumulative_capacity_ah"] == -1.234  # signed like the current
+    assert sample["surface_temperature_celsius"] == 27.0
+    assert sample["test_time_second"] == 3600.0  # the device's own run timer
+
+
+def test_charge_sign_is_positive():
+    sample = sample_from_reading(_reading(status_code=STATUS_CHARGING, mode_code=0))
+    assert sample["current_ampere"] == 1.5
+    assert sample["cumulative_capacity_ah"] == 1.234
+
+
+def test_paused_slot_reports_zero_current():
+    sample = sample_from_reading(_reading(status_code=3, current_ma=0))  # Pause
+    assert sample["current_ampere"] == 0.0
+
+
+# --- polling through the mock transport --------------------------------------
+def test_poll_mock_charging_bay():
+    source = Mc3000Source(slot=0, transport="mock")  # mock bay 0 charges a LiIon at 1 A
+    try:
+        first = source.poll()
+        second = source.poll()
+    finally:
+        source.close()
+    assert len(first) == len(second) == 1
+    sample = first[0]
+    assert set(sample) == BDF_KEYS
+    assert sample["current_ampere"] == 1.0  # charging -> positive
+    assert 3.0 < sample["voltage_volt"] < 4.5
+    # Device timebase is preferred: the mock advances one second per poll.
+    assert first[0]["test_time_second"] == 1.0
+    assert second[0]["test_time_second"] == 2.0
+
+
+def test_poll_mock_discharging_bay_is_negative():
+    source = Mc3000Source(slot=1, transport="mock")  # mock bay 1 discharges at 0.5 A
+    try:
+        samples = [source.poll()[0] for _ in range(10)]
+    finally:
+        source.close()
+    assert all(sample["current_ampere"] == -0.5 for sample in samples)
+    assert all(sample["cumulative_capacity_ah"] <= 0 for sample in samples)
+    assert samples[-1]["cumulative_capacity_ah"] < 0  # enough mAh accumulated to show
+
+
+def test_poll_empty_bay_returns_no_samples():
+    source = Mc3000Source(slot=3, transport="mock")  # mock bay 3 has no cell
+    try:
+        assert source.poll() == []
+    finally:
+        source.close()
+
+
+def test_unreachable_device_raises_for_harvester_backoff(monkeypatch):
+    source = Mc3000Source(transport="mock")
+    monkeypatch.setattr(source_mod, "build_transport", lambda kind, address=None: _DeadTransport())
+    with pytest.raises(TransportError):
+        source.poll()
+
+
+# --- metadata -----------------------------------------------------------------
+def test_metadata_shape_and_machine_info():
+    source = Mc3000Source(slot=2, transport="mock")
+    try:
+        meta = source.metadata()
+    finally:
+        source.close()
+    assert meta["source"] == "mc3000"
+    assert meta["instrument_model"] == "SkyRC MC3000"
+    assert meta["transport"] == "mock"
+    assert meta["address"] is None
+    assert meta["slot"] == 2
+    assert meta["channel"] == 3  # 1-based label printed on the unit
+    # The mock charger reports a serial; it round-trips the machine-info frame.
+    assert bytes.fromhex(meta["serial"]) == b"MOCKMC3000DEV01"
+    assert meta["firmware"] is None
+    json.dumps(meta)  # must be JSON-serialisable for the .meta.json sidecar
+
+
+def test_metadata_tolerates_unreachable_device(monkeypatch):
+    source = Mc3000Source(transport="mock")
+    monkeypatch.setattr(
+        source_mod, "build_transport", lambda kind, address=None: _NoOpenTransport()
+    )
+    meta = source.metadata()  # must not raise
+    assert meta["serial"] is None
+    assert meta["firmware"] is None
+    assert meta["transport"] == "mock"
+    json.dumps(meta)
+
+
+# --- lifecycle ----------------------------------------------------------------
+def test_close_is_idempotent_and_poll_reconnects():
+    source = Mc3000Source(slot=0, transport="mock")
+    source.close()  # closing before ever connecting is fine
+    assert source.poll()  # lazy connect
+    source.close()
+    source.close()  # second close is a no-op
+    assert source.poll()  # a fresh transport is built after close
+    source.close()

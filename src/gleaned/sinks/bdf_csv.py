@@ -18,7 +18,9 @@ import json
 import logging
 from datetime import timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence, TextIO
+
+from ..protocols import SampleValue
 
 __all__ = ["REQUIRED_COLUMNS", "BdfCsvSink", "dataset_filename", "validate_file"]
 
@@ -92,7 +94,7 @@ class BdfCsvSink:
         self._metadata = dict(metadata or {})
         self._started_at = self._utcnow()
         self._columns: list[str] | None = None
-        self._file = None
+        self._file: TextIO | None = None
         self._writer: csv.DictWriter | None = None
         self._rows_written = 0
         self._closed = False
@@ -105,7 +107,7 @@ class BdfCsvSink:
     def _utcnow() -> str:
         return datetime.datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-    def _open(self, first_batch: Sequence[Mapping[str, float]]) -> None:
+    def _open(self, first_batch: Sequence[Mapping[str, SampleValue]]) -> None:
         inferred = self._explicit_columns
         if inferred is None:
             seen: set[str] = set()
@@ -121,7 +123,7 @@ class BdfCsvSink:
         self._writer.writeheader()
         logger.info("Writing BDF CSV %s with columns %s", self._path, self._columns)
 
-    def write(self, rows: Iterable[Mapping[str, float]]) -> None:
+    def write(self, rows: Iterable[Mapping[str, SampleValue]]) -> None:
         """Append a batch of samples to the file (opens it on first use)."""
         if self._closed:
             raise ValueError(f"BdfCsvSink for {self._path} is closed")
@@ -138,6 +140,10 @@ class BdfCsvSink:
                 logger.debug("Dropping columns not in header for %s: %s", self._path, dropped)
             self._writer.writerow(row)
         self._rows_written += len(batch)
+        # Long-running field collection must survive a crash: flush every batch
+        # (cheap at polling rates) so data on disk stays current.
+        assert self._file is not None
+        self._file.flush()
 
     def close(self) -> None:
         """Close the CSV file and write the ``.meta.json`` sidecar. Idempotent."""
@@ -195,7 +201,7 @@ def validate_file(path: str | Path) -> dict[str, Any]:
     except ImportError as exc:
         raise ImportError(
             "validate_file needs the optional 'batterydf' package, which is "
-            "not installed. Install it with: pip install \"gleaned[bdf]\"."
+            'not installed. Install it with: pip install "gleaned[bdf]".'
         ) from exc
     try:
         report = bdf.validate(str(path))

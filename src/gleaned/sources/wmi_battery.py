@@ -37,7 +37,7 @@ class WmiBatterySource:
         except ImportError as exc:
             raise ImportError(
                 "WmiBatterySource needs the optional 'wmi' package, which is "
-                "not installed. Install it with: pip install \"gleaned[wmi]\" "
+                'not installed. Install it with: pip install "gleaned[wmi]" '
                 "(Windows only)."
             ) from exc
         self.name = name
@@ -52,7 +52,7 @@ class WmiBatterySource:
         if sys.platform != "win32":
             return "requires Windows"
         if importlib.util.find_spec("wmi") is None:
-            return "missing optional dependency; pip install \"gleaned[wmi]\""
+            return 'missing optional dependency; pip install "gleaned[wmi]"'
         return None
 
     def metadata(self) -> Mapping[str, Any]:

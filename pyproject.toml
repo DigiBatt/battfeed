@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gleaned"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turn live battery data sources into BDF feeds"
 readme = "README.md"
 authors = [{ name = "Simon Clark" }]
@@ -30,6 +30,8 @@ Issues = "https://github.com/DigiBatt/gleaned/issues"
 
 [project.optional-dependencies]
 wmi = ["wmi"]
+mc3000-ble = ["bleak>=0.21"]
+mc3000-usb = ["pyusb>=1.2"]
 bdf = ["batterydf"]
 dev = ["pytest", "ruff", "mypy"]
 
@@ -42,6 +44,8 @@ gleaned = "gleaned.cli:main"
 simulator = "gleaned.sources.simulator:SimulatedCellSource"
 csvtail = "gleaned.sources.csvtail:CsvTailSource"
 wmi = "gleaned.sources.wmi_battery:WmiBatterySource"
+mc3000 = "gleaned.sources.mc3000:Mc3000Source"
+android = "gleaned.sources.android:AndroidBatterySource"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -57,3 +61,8 @@ target-version = "py310"
 [tool.mypy]
 python_version = "3.10"
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# Optional integrations without type stubs, imported lazily behind extras.
+module = ["bdf", "bdf.*", "wmi", "bleak", "bleak.*", "usb", "usb.*"]
+ignore_missing_imports = true

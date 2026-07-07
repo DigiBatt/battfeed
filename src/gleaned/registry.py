@@ -30,6 +30,8 @@ _BUILTINS: dict[str, str] = {
     "simulator": "gleaned.sources.simulator:SimulatedCellSource",
     "csvtail": "gleaned.sources.csvtail:CsvTailSource",
     "wmi": "gleaned.sources.wmi_battery:WmiBatterySource",
+    "mc3000": "gleaned.sources.mc3000:Mc3000Source",
+    "android": "gleaned.sources.android:AndroidBatterySource",
 }
 
 
@@ -42,10 +44,15 @@ def available_sources() -> dict[str, type]:
     """Return every discoverable source class, keyed by source name.
 
     Built-ins are always present; entry points contribute additional names.
-    A broken third-party entry point is skipped with a warning rather than
-    breaking discovery for everyone else.
+    A broken source is skipped with a warning rather than breaking
+    discovery for everyone else.
     """
-    found: dict[str, type] = {name: _load(target) for name, target in _BUILTINS.items()}
+    found: dict[str, type] = {}
+    for name, target in _BUILTINS.items():
+        try:
+            found[name] = _load(target)
+        except Exception:  # pragma: no cover - only hit with a broken install
+            logger.warning("Skipping broken built-in source %r (%s)", name, target)
     for ep in entry_points(group="gleaned.sources"):
         if ep.name in found:
             continue  # built-ins win; also dedupes gleaned's own entry points
@@ -69,7 +76,5 @@ def create_source(name: str, **kwargs):
     try:
         cls = sources[name]
     except KeyError:
-        raise KeyError(
-            f"Unknown source {name!r}. Available sources: {sorted(sources)}"
-        ) from None
+        raise KeyError(f"Unknown source {name!r}. Available sources: {sorted(sources)}") from None
     return cls(**kwargs)

@@ -116,7 +116,9 @@ class CsvTailSource:
             except ValueError:
                 logger.warning(
                     "Skipping row in %s: column %r value %r is not numeric",
-                    self._path, source_column, value,
+                    self._path,
+                    source_column,
+                    value,
                 )
                 return None
             sample[bdf_name] = number * self._unit_scale.get(bdf_name, 1.0)

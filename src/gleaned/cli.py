@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import inspect
+import json
 import logging
 import signal
 import sys
 import threading
 from pathlib import Path
+from typing import Any
 
-from .harvester import Harvester
+from .harvester import Harvester, SourceFailure
 from .registry import available_sources, create_source
 from .sinks.bdf_csv import dataset_filename, BdfCsvSink
 
@@ -34,29 +37,47 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("sources", help="list available data sources")
 
-    collect = subparsers.add_parser(
-        "collect", help="poll a source and write a .bdf.csv file"
-    )
+    collect = subparsers.add_parser("collect", help="poll a source and write a .bdf.csv file")
     collect.add_argument("--source", required=True, help="source name (see 'gleaned sources')")
     collect.add_argument(
-        "--duration", type=float, required=True, metavar="SECONDS",
-        help="how long to collect, in seconds",
+        "--duration",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="how long to collect, in seconds (default: run until Ctrl-C)",
     )
     collect.add_argument(
-        "--interval", type=float, default=1.0, metavar="SECONDS",
+        "--interval",
+        type=float,
+        default=1.0,
+        metavar="SECONDS",
         help="polling interval in seconds (default: 1.0)",
     )
     collect.add_argument(
-        "--out", type=Path, default=None,
-        help="output .bdf.csv path (default: generated from --institution/--cell "
-             "as InstitutionCode__CellName__YYYYMMDD_XXX.bdf.csv)",
+        "--opt",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="source constructor option, repeatable (values parsed as JSON when "
+        "possible, e.g. --opt slot=2 --opt path='\"log.csv\"' --opt "
+        'column_map=\'{"V":"voltage_volt"}\'); '
+        "see 'gleaned sources' for each source's options",
     )
     collect.add_argument(
-        "--institution", default="LOCAL",
+        "--out",
+        type=Path,
+        default=None,
+        help="output .bdf.csv path (default: generated from --institution/--cell "
+        "as InstitutionCode__CellName__YYYYMMDD_XXX.bdf.csv)",
+    )
+    collect.add_argument(
+        "--institution",
+        default="LOCAL",
         help="institution code used in the generated file name (default: LOCAL)",
     )
     collect.add_argument(
-        "--cell", default=None,
+        "--cell",
+        default=None,
         help="cell name used in the generated file name (default: the source name)",
     )
     return parser
@@ -65,6 +86,39 @@ def build_parser() -> argparse.ArgumentParser:
 def _describe(cls: type) -> str:
     doc = (cls.__doc__ or "").strip()
     return doc.splitlines()[0] if doc else "(no description)"
+
+
+def _options_of(cls: type) -> str:
+    """Render a source's constructor options, e.g. ``slot=0, address=None``."""
+    try:
+        params = inspect.signature(cls).parameters
+    except (TypeError, ValueError):
+        return ""
+    rendered = [
+        name if p.default is inspect.Parameter.empty else f"{name}={p.default!r}"
+        for name, p in params.items()
+        if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)
+    ]
+    return ", ".join(rendered)
+
+
+def _parse_opts(pairs: list[str]) -> dict[str, Any]:
+    """Parse repeated ``--opt KEY=VALUE`` flags into constructor kwargs.
+
+    Values are interpreted as JSON when they parse (numbers, booleans, null,
+    quoted strings, objects, arrays); anything else is taken as a literal
+    string, so ``--opt path=log.csv`` just works.
+    """
+    opts: dict[str, Any] = {}
+    for pair in pairs:
+        key, sep, value = pair.partition("=")
+        if not sep or not key:
+            raise SystemExit(f"error: --opt expects KEY=VALUE, got {pair!r}")
+        try:
+            opts[key] = json.loads(value)
+        except json.JSONDecodeError:
+            opts[key] = value
+    return opts
 
 
 def _cmd_sources() -> int:
@@ -79,6 +133,9 @@ def _cmd_sources() -> int:
             if reason:
                 note = f"  [unavailable: {reason}]"
         print(f"{name:<{width}}  {_describe(cls)}{note}")
+        options = _options_of(cls)
+        if options:
+            print(f"{'':<{width}}    options: {options}")
     return 0
 
 
@@ -88,21 +145,20 @@ def _default_out_path(institution: str, cell: str) -> Path:
         candidate = Path(dataset_filename(institution, cell, today, seq))
         if not candidate.exists():
             return candidate
-    raise FileExistsError(
-        f"All sequence numbers 001-999 are taken for {institution}/{cell} today"
-    )
+    raise FileExistsError(f"All sequence numbers 001-999 are taken for {institution}/{cell} today")
 
 
 def _cmd_collect(args: argparse.Namespace) -> int:
     try:
-        source = create_source(args.source)
+        source = create_source(args.source, **_parse_opts(args.opt))
     except KeyError as exc:
         print(f"error: {exc.args[0]}", file=sys.stderr)
         return 2
-    except TypeError:
+    except TypeError as exc:
         print(
-            f"error: source {args.source!r} requires constructor arguments and cannot be "
-            "started from the CLI; use the Python API (gleaned.create_source) instead.",
+            f"error: bad options for source {args.source!r}: {exc}\n"
+            "Pass constructor options with --opt KEY=VALUE "
+            "(see 'gleaned sources' for each source's options).",
             file=sys.stderr,
         )
         return 2
@@ -134,6 +190,8 @@ def _cmd_collect(args: argparse.Namespace) -> int:
     except ValueError:  # not the main thread; run without a SIGINT hook
         pass
 
+    if args.duration is None:
+        print(f"Collecting from '{args.source}' until Ctrl-C ...", file=sys.stderr)
     try:
         stats = harvester.collect(
             args.source,
@@ -142,6 +200,9 @@ def _cmd_collect(args: argparse.Namespace) -> int:
             sink=sink,
             stop=stop,
         )
+    except SourceFailure as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     finally:
         sink.close()
         close = getattr(source, "close", None)
@@ -151,9 +212,10 @@ def _cmd_collect(args: argparse.Namespace) -> int:
             signal.signal(signal.SIGINT, previous_handler)
 
     interrupted = " (interrupted)" if stop.is_set() else ""
+    tolerated = f", {stats.errors} tolerated error(s)" if stats.errors else ""
     print(
         f"Collected {stats.samples} sample(s) from '{stats.source}' "
-        f"in {stats.duration_s:.1f} s -> {out_path}{interrupted}"
+        f"in {stats.duration_s:.1f} s{tolerated} -> {out_path}{interrupted}"
     )
     return 0
 

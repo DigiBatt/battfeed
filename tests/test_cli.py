@@ -18,12 +18,18 @@ def test_collect_simulator_end_to_end(tmp_path, capsys):
     exit_code = cli.main(
         [
             "collect",
-            "--source", "simulator",
-            "--duration", "0.05",
-            "--interval", "0.01",
-            "--out", str(out_path),
-            "--institution", "TEST",
-            "--cell", "SimCell",
+            "--source",
+            "simulator",
+            "--duration",
+            "0.05",
+            "--interval",
+            "0.01",
+            "--out",
+            str(out_path),
+            "--institution",
+            "TEST",
+            "--cell",
+            "SimCell",
         ]
     )
     assert exit_code == 0

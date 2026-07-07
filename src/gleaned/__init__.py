@@ -11,18 +11,22 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("gleaned")
 except PackageNotFoundError:  # running from a source tree without installation
-    __version__ = "0.2.0"
+    __version__ = "0.3.0"
 
-from .harvester import CollectStats, Harvester
-from .protocols import DataSource, Sink
+from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure
+from .protocols import DataSource, Sample, SampleValue, Sink
 from .registry import available_sources, create_source
 from .sinks.bdf_csv import BdfCsvSink
 
 __all__ = [
     "DataSource",
     "Sink",
+    "Sample",
+    "SampleValue",
     "Harvester",
     "CollectStats",
+    "ErrorPolicy",
+    "SourceFailure",
     "BdfCsvSink",
     "available_sources",
     "create_source",
