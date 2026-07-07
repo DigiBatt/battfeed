@@ -26,13 +26,13 @@ def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
-def sample_from_reading(reading: SlotReading) -> dict[str, float | int | str]:
+def sample_from_reading(
+    reading: SlotReading, *, time_base: str = "collection"
+) -> dict[str, float | int | str]:
     """Map one decoded :class:`SlotReading` (device units) to BDF columns.
 
     Conversions:
 
-    * ``test_time_second``: ``elapsed_s`` as-is -- the device's own run timer
-      for the active program (a uint16, so it wraps after 65535 s ~ 18.2 h).
     * ``voltage_volt``: ``voltage_mv`` / 1000.
     * ``current_ampere``: ``current_ma`` / 1000, signed (see below).
     * ``cumulative_capacity_ah``: ``capacity_mah`` / 1000, signed like the
@@ -40,6 +40,15 @@ def sample_from_reading(reading: SlotReading) -> dict[str, float | int | str]:
     * ``surface_temperature_celsius``: ``temperature`` as-is (the MC3000's
       per-bay battery sensor, whole degrees; the unit follows the machine's
       display setting and is Celsius on the factory default).
+
+    Timebase (``time_base``): with the default ``"collection"`` the sample
+    carries **no** ``test_time_second`` and the harvester stamps elapsed
+    collection time -- always monotonic, works while the bay idles. With
+    ``"device"`` the sample carries the device's own program run timer
+    (``elapsed_s``), which aligns rows with the running charge/discharge
+    program but is 0 whenever no program runs, resets per program leg, and
+    wraps after 65535 s (~18.2 h). Verified on hardware: an idle bay reports
+    a constant 0, which is why "device" is not the default.
 
     Sign rule (BDF convention: positive current charges the cell): the MC3000
     reports current and accumulated capacity as unsigned magnitudes, and the
@@ -49,13 +58,15 @@ def sample_from_reading(reading: SlotReading) -> dict[str, float | int | str]:
     positive.
     """
     sign = -1.0 if reading.is_discharging else 1.0
-    return {
-        "test_time_second": float(reading.elapsed_s),
+    sample: dict[str, float | int | str] = {
         "voltage_volt": reading.voltage_mv / 1000.0,
         "current_ampere": sign * reading.current_ma / 1000.0,
         "cumulative_capacity_ah": sign * reading.capacity_mah / 1000.0,
         "surface_temperature_celsius": float(reading.temperature),
     }
+    if time_base == "device":
+        sample["test_time_second"] = float(reading.elapsed_s)
+    return sample
 
 
 class Mc3000Source:
@@ -96,14 +107,27 @@ class Mc3000Source:
         address: BLE device address of the charger, e.g.
             ``"AA:BB:CC:DD:EE:FF"``. Required for ``transport="ble"``,
             ignored otherwise.
+        time_base: ``"collection"`` (default) leaves ``test_time_second`` to
+            the harvester's collection clock; ``"device"`` uses the charger's
+            own program run timer instead (see :func:`sample_from_reading`
+            for the trade-off).
     """
 
-    def __init__(self, slot: int = 0, transport: str = "ble", address: str | None = None) -> None:
+    def __init__(
+        self,
+        slot: int = 0,
+        transport: str = "ble",
+        address: str | None = None,
+        time_base: str = "collection",
+    ) -> None:
         transport = str(transport).lower()
         if transport not in _TRANSPORT_KINDS:
             raise ValueError(
                 f"transport must be one of {list(_TRANSPORT_KINDS)}, got {transport!r}"
             )
+        time_base = str(time_base).lower()
+        if time_base not in ("collection", "device"):
+            raise ValueError(f'time_base must be "collection" or "device", got {time_base!r}')
         if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < SLOT_COUNT:
             raise ValueError(
                 f"slot must be an integer 0-{SLOT_COUNT - 1} (0-based: slot=0 is the "
@@ -125,9 +149,11 @@ class Mc3000Source:
         self._slot = slot
         self._transport_kind = transport
         self._address = address
+        self._time_base = time_base
         self._transport: Transport | None = None
         self._reader: Mc3000Reader | None = None
         self._machine_info: MachineInfo | None = None
+        self._machine_info_attempted = False
 
     @classmethod
     def availability(cls) -> str | None:
@@ -158,12 +184,14 @@ class Mc3000Source:
             "channel": self._slot + 1,
             "serial": info.serial if info else None,
             "firmware": info.firmware if info else None,
+            "time_base": self._time_base,
             "notes": (
                 "One bay per source; slot is 0-based (slot 0 = channel 1, the "
                 "leftmost bay). Voltage from mV; current and cumulative capacity "
                 "from unsigned mA/mAh with the direction taken from the slot "
                 "status -- positive current = charging (BDF convention). "
-                "test_time_second is the device's own program run timer."
+                'test_time_second is the harvester collection clock (time_base="collection") '
+                'or the device\'s own program run timer (time_base="device").'
             ),
         }
 
@@ -179,7 +207,7 @@ class Mc3000Source:
         reading = self._ensure_reader().read_slot(self._slot)
         if reading is None or not reading.occupied:
             return []
-        return [sample_from_reading(reading)]
+        return [sample_from_reading(reading, time_base=self._time_base)]
 
     def close(self) -> None:
         """Disconnect from the device. Idempotent; a later poll() reconnects."""
@@ -207,11 +235,14 @@ class Mc3000Source:
     def _read_machine_info(self) -> MachineInfo | None:
         """Fetch and cache the instrument identity; ``None`` when unavailable.
 
-        Tolerates any failure (missing device, dead link): metadata() must
-        keep working with the identity fields set to ``None``. Only a
-        successful read is cached, so a later call can still succeed.
+        Attempted exactly once per source instance and tolerant of any
+        failure: metadata() must keep working with the identity fields set to
+        ``None``. Verified on hardware: some MC3000 firmware never answers
+        the machine-info opcode at all (zero reply bytes), so retrying would
+        only add a poll-timeout of dead air to the start of every run.
         """
-        if self._machine_info is None:
+        if not self._machine_info_attempted:
+            self._machine_info_attempted = True
             try:
                 self._machine_info = self._ensure_reader().read_machine_info()
             except Exception as exc:

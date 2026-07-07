@@ -17,13 +17,15 @@ from gleaned.sources.mc3000.protocol import (
 from gleaned.sources.mc3000.source import sample_from_reading
 from gleaned.sources.mc3000.transports.base import Transport, TransportError
 
+#: Default (time_base="collection"): no test_time_second -- the harvester stamps it.
 BDF_KEYS = {
-    "test_time_second",
     "voltage_volt",
     "current_ampere",
     "cumulative_capacity_ah",
     "surface_temperature_celsius",
 }
+#: time_base="device": the device's own program run timer rides along.
+BDF_KEYS_DEVICE = BDF_KEYS | {"test_time_second"}
 
 
 def _reading(**overrides) -> SlotReading:
@@ -107,6 +109,8 @@ def test_constructor_validates_slot_and_transport():
         Mc3000Source(transport="serial")
     with pytest.raises(ValueError, match="address"):
         Mc3000Source(transport="ble")  # BLE needs an address, checked before deps
+    with pytest.raises(ValueError, match="time_base"):
+        Mc3000Source(transport="mock", time_base="wall-clock")
 
 
 def test_hardware_transports_require_optional_deps(monkeypatch):
@@ -120,11 +124,16 @@ def test_hardware_transports_require_optional_deps(monkeypatch):
 # --- unit conversion and sign convention (known readings) --------------------
 def test_units_and_discharge_sign_on_known_reading():
     sample = sample_from_reading(_reading())  # discharging: 3700 mV, 1500 mA, 1234 mAh
-    assert set(sample) == BDF_KEYS
+    assert set(sample) == BDF_KEYS  # no test_time_second: the harvester stamps it
     assert sample["voltage_volt"] == 3.7
     assert sample["current_ampere"] == -1.5  # discharge -> negative (BDF)
     assert sample["cumulative_capacity_ah"] == -1.234  # signed like the current
     assert sample["surface_temperature_celsius"] == 27.0
+
+
+def test_device_time_base_uses_the_program_run_timer():
+    sample = sample_from_reading(_reading(), time_base="device")
+    assert set(sample) == BDF_KEYS_DEVICE
     assert sample["test_time_second"] == 3600.0  # the device's own run timer
 
 
@@ -149,10 +158,20 @@ def test_poll_mock_charging_bay():
         source.close()
     assert len(first) == len(second) == 1
     sample = first[0]
+    # Default timebase: no test_time_second in the sample; the harvester stamps it.
     assert set(sample) == BDF_KEYS
     assert sample["current_ampere"] == 1.0  # charging -> positive
     assert 3.0 < sample["voltage_volt"] < 4.5
-    # Device timebase is preferred: the mock advances one second per poll.
+
+
+def test_poll_mock_with_device_time_base():
+    source = Mc3000Source(slot=0, transport="mock", time_base="device")
+    try:
+        first = source.poll()
+        second = source.poll()
+    finally:
+        source.close()
+    # The mock's run timer advances one second per poll.
     assert first[0]["test_time_second"] == 1.0
     assert second[0]["test_time_second"] == 2.0
 
@@ -196,6 +215,7 @@ def test_metadata_shape_and_machine_info():
     assert meta["address"] is None
     assert meta["slot"] == 2
     assert meta["channel"] == 3  # 1-based label printed on the unit
+    assert meta["time_base"] == "collection"
     # The mock charger reports a serial; it round-trips the machine-info frame.
     assert bytes.fromhex(meta["serial"]) == b"MOCKMC3000DEV01"
     assert meta["firmware"] is None

@@ -59,11 +59,13 @@ class BleTransport(Transport):
         self._reconnecting = False
         self._last_reconnect = 0.0
         self._reconnect_backoff = 3.0  # min seconds between reconnect attempts
+        self._closing = False  # intentional close() in progress: don't warn/reconnect
 
     # -- lifecycle -----------------------------------------------------------
     def open(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        self._closing = False
         self._thread = threading.Thread(target=self._run_loop, name="mc3000-ble", daemon=True)
         self._thread.start()
         if not self._ready.wait(timeout=25.0):
@@ -100,6 +102,10 @@ class BleTransport(Transport):
         self._client = BleakClient(self.address, disconnected_callback=self._on_disconnect)
         await self._client.connect()
         await self._client.start_notify(CHARACTERISTIC_UUID, self._on_notify)
+        # HM-10 bridge settle: a write sent immediately after subscribing is
+        # dropped by the module (verified on hardware -- the first request
+        # after connect timed out without this).
+        await asyncio.sleep(0.35)
         self._connected = True
         logger.info("BLE connected to %s", self.address)
 
@@ -107,6 +113,9 @@ class BleTransport(Transport):
         # bleak calls this when the peripheral drops. Flag it so the next poll()
         # kicks off a background reconnect instead of failing forever.
         self._connected = False
+        if self._closing:
+            logger.debug("BLE disconnected (closing) %s", self.address)
+            return
         logger.warning("BLE link dropped (%s) -- will reconnect", self.address)
 
     async def _reconnect(self) -> None:
@@ -123,6 +132,7 @@ class BleTransport(Transport):
             self._client = BleakClient(self.address, disconnected_callback=self._on_disconnect)
             await self._client.connect(timeout=15.0)
             await self._client.start_notify(CHARACTERISTIC_UUID, self._on_notify)
+            await asyncio.sleep(0.35)  # HM-10 settle, same as the initial connect
             self._connected = True
             logger.info("BLE reconnected to %s", self.address)
         except Exception as e:  # pragma: no cover - hardware path
@@ -200,6 +210,7 @@ class BleTransport(Transport):
     def close(self) -> None:
         if self._loop is None:
             return
+        self._closing = True
 
         async def _disconnect():
             try:

@@ -36,6 +36,20 @@ a proprietary platform, which retires its own copies in favour of gleaned.
 - Built-in source discovery is resilient: one broken source no longer breaks
   `gleaned sources` for the rest.
 
+### Hardware shakedown (verified against a physical MC3000 over BLE)
+
+- `Mc3000Source` gained `time_base` (`"collection"` default | `"device"`):
+  an idle bay reports a constant-zero program timer, so the harvester's
+  collection clock is now the default timebase and the device run timer is
+  opt-in for program-aligned captures.
+- BLE transport settles 0.35 s after subscribing before the first write —
+  the HM-10 bridge drops a write sent immediately after `start_notify`.
+- Intentional `close()` no longer logs a spurious "will reconnect" warning.
+- Machine-info is attempted once per source: the tested firmware never
+  answers the opcode (zero reply bytes), so retries only delayed run start.
+- Field note: the unit advertises as **"Charger"** (no "MC3000" in the BLE
+  name); discover it by the FFE0 service UUID, not by name.
+
 ## [0.2.0] - 2026-07-07
 
 - Complete rebuild as the source→BDF collector toolkit: `DataSource`/`Sink`
