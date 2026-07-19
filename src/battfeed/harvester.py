@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from .protocols import DataSource, Sink
+from .protocols import RESERVED_KEYS, DataSource, Sink
 
 __all__ = ["CollectStats", "ErrorPolicy", "Harvester", "SourceFailure"]
 
@@ -195,6 +195,7 @@ class Harvester:
         samples = 0
         error_count = 0
         consecutive_errors = 0
+        warned_i5 = False
         start = clock()
         logger.info(
             "Collecting from %r %s at %.3gs intervals",
@@ -237,7 +238,22 @@ class Harvester:
             consecutive_errors = 0
             elapsed = clock() - start
             for row in batch:
-                row.setdefault("test_time_second", elapsed)
+                if "test_time_second" not in row:
+                    # Stamping is only correct for single-object sources: a
+                    # routed row getting the SHARED elapsed-collection time is
+                    # a contract violation (invariant I5) -- an object that
+                    # appears mid-run would not start its file at t = 0.
+                    if not warned_i5 and any(key in row for key in RESERVED_KEYS):
+                        warned_i5 = True
+                        logger.warning(
+                            "Source %r emits routing keys (%s) without supplying its own "
+                            "test_time_second; stamping the shared elapsed-collection time "
+                            "violates the routing contract (invariant I5) and yields a wrong "
+                            "timebase for multi-object streams",
+                            source_name,
+                            "/".join(RESERVED_KEYS),
+                        )
+                    row["test_time_second"] = elapsed
                 columns.update(row)
             if batch:
                 sink.write(batch)

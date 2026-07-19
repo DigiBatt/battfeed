@@ -14,6 +14,23 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   and a source that emits them must supply its own zero-based-per-(series, run)
   `test_time_second` (invariant I5). Groundwork for the forthcoming
   `RoutingSink`.
+- `RoutingSink` (`battfeed.RoutingSink`): demultiplexes one sample stream into
+  one BDF file per (`series_id`, `run_id`), with time- and/or row-based
+  rotation for unbounded streams (segments are runs; each closed segment is
+  finalized with its sidecar immediately). Includes a `series_info` hook for
+  per-object filenames/metadata, deterministic case-insensitive sanitization
+  of raw series ids into BDF cell names (`battfeed.sinks.sanitize_cell_name`;
+  colliding ids get a stable hash suffix -- the sidecar's raw `series_id`,
+  not the filename, is the stable join key), a single default stream for
+  routing-free samples, per-series file reporting via `files_by_series`, and
+  injectable `sink_factory`/`clock`/`today` for tests. Dataset paths are
+  reserved atomically (`O_CREAT|O_EXCL`) at allocation, so concurrent
+  collections into one directory can never claim the same file.
+  Source-supplied `test_time_second` passes through untouched (invariant I5).
+- `Harvester.collect` now warns (once per source per run) when it has to
+  stamp its shared elapsed-collection `test_time_second` onto a sample that
+  carries routing keys -- such a source violates invariant I5 and gets a
+  wrong timebase for objects appearing mid-run.
 
 ### Changed
 

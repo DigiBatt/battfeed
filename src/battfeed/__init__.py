@@ -17,6 +17,7 @@ from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure
 from .protocols import RESERVED_KEYS, DataSource, Sample, SampleValue, Sink
 from .registry import available_sources, create_source
 from .sinks.bdf_csv import BdfCsvSink
+from .sinks.routing import RoutingSink
 
 __all__ = [
     "DataSource",
@@ -29,6 +30,7 @@ __all__ = [
     "ErrorPolicy",
     "SourceFailure",
     "BdfCsvSink",
+    "RoutingSink",
     "available_sources",
     "create_source",
     "__version__",
