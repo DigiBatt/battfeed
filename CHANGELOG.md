@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Reserved routing keys in the sample contract: `protocols.RESERVED_KEYS`
+  (`series_id`, `run_id`) document *which physical object* and *which run
+  segment* a sample belongs to. They are routing metadata, never BDF columns,
+  and a source that emits them must supply its own zero-based-per-(series, run)
+  `test_time_second` (invariant I5). Groundwork for the forthcoming
+  `RoutingSink`.
+
+### Changed
+
+- `BdfCsvSink` strips the reserved routing keys from every row (and from any
+  explicit `columns` set) before header inference and writing, so a
+  routing-aware source wired to the plain sink cannot leak them into CSV
+  columns.
+- `BdfCsvSink` writes its `.meta.json` sidecar **early** — as soon as the data
+  file is first opened, marked `"finalized": false` — rewrites it periodically
+  as rows accumulate, and finalises it (`"finalized": true`, final row count)
+  on `close()`. A crash mid-collection now leaves a valid data file *with*
+  metadata on disk; the new `finalized` flag distinguishes an interrupted run
+  from a clean one. The sidecar is written via a temp-file-and-atomic-replace
+  so readers never see a half-written file.
+
 ## [0.4.0] - 2026-07-08
 
 Renamed from `gleaned` to **battfeed** (the package is domain-anchored; a

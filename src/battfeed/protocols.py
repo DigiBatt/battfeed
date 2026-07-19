@@ -26,13 +26,49 @@ belong in :meth:`DataSource.metadata`, not in every sample.
 
 Sign convention (per the Battery Data Format specification): **positive
 current charges the test object, negative current discharges it.**
+
+Reserved routing keys
+---------------------
+Two keys in :data:`RESERVED_KEYS` are part of the sample contract but are
+*not* battery measurements and are **never BDF columns** -- they are routing
+metadata, stripped before any BDF output:
+
+* ``series_id`` -- *which physical object* a sample belongs to (which car,
+  which pack, which bay). One connection can yield many objects.
+* ``run_id`` -- *which test/run segment* the sample belongs to. One object
+  can yield many runs; without ``run_id`` the readings of several runs would
+  merge into a single non-monotonic timebase, which is invalid BDF.
+
+Both are optional per sample, both are ``str`` when present, and both are
+stripped by every sink before writing (see :class:`battfeed.BdfCsvSink`), so
+a routing-aware source wired to a plain, non-routing sink can never leak them
+into CSV columns. A ``RoutingSink`` (a later work package) uses them to
+demultiplex one stream into one BDF file per ``(series_id, run_id)``.
+
+**Timebase ownership (invariant I5).** A source that emits these routing keys
+**must supply its own** ``test_time_second``, zero-based per
+``(series_id, run_id)``. The harvester's fallback stamp is a *shared*
+elapsed-collection time measured from the start of the run; that is only
+correct for single-object sources. An object that comes online two hours into
+a collection must start its file at ``t = 0``, not ``t = 7200`` -- so a
+routing source owns its own per-(series, run) clock rather than relying on the
+harvester.
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Protocol, Union, runtime_checkable
 
-__all__ = ["DataSource", "Sink", "Sample", "SampleValue"]
+__all__ = ["DataSource", "RESERVED_KEYS", "Sink", "Sample", "SampleValue"]
+
+RESERVED_KEYS: tuple[str, ...] = ("series_id", "run_id")
+"""Sample keys that route rather than measure; stripped before BDF output.
+
+See the module docstring for the routing contract. ``series_id`` identifies
+which physical object a sample belongs to; ``run_id`` identifies which
+test-run segment. Both are optional and ``str`` when present, and no sink
+ever writes them as CSV columns.
+"""
 
 SampleValue = Union[float, int, str]
 """A single measured value; numeric for canonical BDF columns."""
@@ -90,6 +126,14 @@ class DataSource(Protocol):
         itself (e.g. when tailing an instrument log that records its own
         timebase); when absent, the harvester stamps each sample with the
         elapsed collection time.
+
+        A sample MAY also carry the routing keys in :data:`RESERVED_KEYS`
+        (``series_id`` / ``run_id``); they route the sample to a per-object,
+        per-run BDF file and are never written as columns. A source that emits
+        them **must** supply its own zero-based-per-(series, run)
+        ``test_time_second`` (invariant I5) -- the harvester's shared
+        elapsed-collection stamp is wrong for objects that appear mid-run.
+        See the module docstring for the full routing contract.
 
         Must not block for longer than roughly one polling interval and must
         never return the same sample twice.
