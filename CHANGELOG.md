@@ -31,6 +31,24 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   stamp its shared elapsed-collection `test_time_second` onto a sample that
   carries routing keys -- such a source violates invariant I5 and gets a
   wrong timebase for objects appearing mid-run.
+- The `battfeed import` verb (`battfeed.run_import`): a batch-import driver
+  that drains file-ingesting sources through the same `DataSource` seam --
+  one-shot until the source reports drained (optional `drained()` hook,
+  which requires a stop event) or `--watch` until Ctrl-C -- writing through
+  a `RoutingSink` (one `.bdf.csv` + sidecar per (series, run)). Import
+  delivery is **at-least-once**: the driver calls the source's optional
+  `commit_batch()` hook only after a batch is safely written, so a crash
+  mid-import re-imports the file into new segment files rather than
+  silently losing it. The driver warns when imported rows lack
+  `test_time_second` (invariant I5), and all waits are stop-responsive, so
+  Ctrl-C interrupts even a long backoff immediately.
+- `battfeed.ImportLedger`: a JSON-backed, sha256-content-keyed dedupe
+  ledger and quarantine for import sources (single-writer; zero-byte files
+  are never content-keyed; skips logged; `hash_of()`/`content_hash=` to
+  hash each file once), with atomic unique-temp-file writes.
+  `--reset-ledger` clears it via a source's `reset_ledger()` hook --
+  deleting output files never does, and a corrupt ledger file must be
+  deleted manually.
 
 ### Changed
 

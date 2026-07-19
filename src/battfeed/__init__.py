@@ -14,6 +14,8 @@ except PackageNotFoundError:  # running from a source tree without installation
     __version__ = "0.4.0"
 
 from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure
+from .importer import ImportStats, run_import
+from .ingest_state import ImportLedger
 from .protocols import RESERVED_KEYS, DataSource, Sample, SampleValue, Sink
 from .registry import available_sources, create_source
 from .sinks.bdf_csv import BdfCsvSink
@@ -29,6 +31,9 @@ __all__ = [
     "CollectStats",
     "ErrorPolicy",
     "SourceFailure",
+    "ImportLedger",
+    "ImportStats",
+    "run_import",
     "BdfCsvSink",
     "RoutingSink",
     "available_sources",

@@ -1,8 +1,9 @@
-"""Command-line interface: ``battfeed sources`` and ``battfeed collect``."""
+"""Command-line interface: ``battfeed sources``, ``battfeed collect``, ``battfeed import``."""
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import inspect
 import json
@@ -11,11 +12,14 @@ import signal
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .harvester import Harvester, SourceFailure
+from .importer import run_import
+from .protocols import DataSource
 from .registry import available_sources, create_source
 from .sinks.bdf_csv import dataset_filename, BdfCsvSink
+from .sinks.routing import RoutingSink
 
 __all__ = ["main", "build_parser"]
 
@@ -79,6 +83,53 @@ def build_parser() -> argparse.ArgumentParser:
         "--cell",
         default=None,
         help="cell name used in the generated file name (default: the source name)",
+    )
+
+    importer = subparsers.add_parser(
+        "import",
+        help="drain a batch/file-import source into per-(series, run) .bdf.csv files",
+    )
+    importer.add_argument("--source", required=True, help="source name (see 'battfeed sources')")
+    importer.add_argument(
+        "--opt",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="source constructor option, repeatable (values parsed as JSON when "
+        "possible, e.g. --opt path='\"C:/logs\"'); "
+        "see 'battfeed sources' for each source's options",
+    )
+    importer.add_argument(
+        "--watch",
+        action="store_true",
+        help="keep polling for new files until Ctrl-C "
+        "(default: one-shot, stop when the source is drained)",
+    )
+    importer.add_argument(
+        "--interval",
+        type=float,
+        default=5.0,
+        metavar="SECONDS",
+        help="idle interval between checks for new files (default: 5.0)",
+    )
+    importer.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path("."),
+        help="directory for the .bdf.csv files, one per (series, run) (default: current directory)",
+    )
+    importer.add_argument(
+        "--institution",
+        default="LOCAL",
+        help="institution code used in the generated file names (default: LOCAL)",
+    )
+    importer.add_argument(
+        "--reset-ledger",
+        action="store_true",
+        help="clear the source's dedupe ledger before importing, re-ingesting "
+        "everything (deleting output files never resets the ledger); the source "
+        "must support it (a reset_ledger() hook); cannot repair a corrupt ledger "
+        "file -- delete that file manually as its error message directs",
     )
     return parser
 
@@ -148,22 +199,53 @@ def _default_out_path(institution: str, cell: str) -> Path:
     raise FileExistsError(f"All sequence numbers 001-999 are taken for {institution}/{cell} today")
 
 
-def _cmd_collect(args: argparse.Namespace) -> int:
+def _instantiate_source(name: str, opt_pairs: list[str]) -> DataSource | None:
+    """Build a source for a CLI command; on failure print to stderr and return None."""
     try:
-        source = create_source(args.source, **_parse_opts(args.opt))
+        source: DataSource = create_source(name, **_parse_opts(opt_pairs))
+        return source
     except KeyError as exc:
         print(f"error: {exc.args[0]}", file=sys.stderr)
-        return 2
     except TypeError as exc:
         print(
-            f"error: bad options for source {args.source!r}: {exc}\n"
+            f"error: bad options for source {name!r}: {exc}\n"
             "Pass constructor options with --opt KEY=VALUE "
             "(see 'battfeed sources' for each source's options).",
             file=sys.stderr,
         )
-        return 2
     except ImportError as exc:
         print(f"error: {exc}", file=sys.stderr)
+    except ValueError as exc:
+        # e.g. a torn/corrupt import ledger opened in the source constructor:
+        # the message is actionable on its own; no traceback at the operator.
+        print(f"error: {exc}", file=sys.stderr)
+    return None
+
+
+@contextlib.contextmanager
+def _sigint_sets(stop: threading.Event) -> Iterator[None]:
+    """Route Ctrl-C into ``stop`` so loops end cleanly and files are finalised."""
+    previous = None
+    try:
+        previous = signal.signal(signal.SIGINT, lambda *_: stop.set())
+    except ValueError:  # not the main thread; run without a SIGINT hook
+        pass
+    try:
+        yield
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGINT, previous)
+
+
+def _close_source(source: DataSource) -> None:
+    close = getattr(source, "close", None)
+    if callable(close):
+        close()
+
+
+def _cmd_collect(args: argparse.Namespace) -> int:
+    source = _instantiate_source(args.source, args.opt)
+    if source is None:
         return 2
 
     cell = args.cell or args.source
@@ -184,32 +266,23 @@ def _cmd_collect(args: argparse.Namespace) -> int:
 
     # Ctrl-C sets the stop event so the loop ends cleanly and files are finalised.
     stop = threading.Event()
-    previous_handler = None
-    try:
-        previous_handler = signal.signal(signal.SIGINT, lambda *_: stop.set())
-    except ValueError:  # not the main thread; run without a SIGINT hook
-        pass
-
     if args.duration is None:
         print(f"Collecting from '{args.source}' until Ctrl-C ...", file=sys.stderr)
     try:
-        stats = harvester.collect(
-            args.source,
-            duration_s=args.duration,
-            interval_s=args.interval,
-            sink=sink,
-            stop=stop,
-        )
+        with _sigint_sets(stop):
+            stats = harvester.collect(
+                args.source,
+                duration_s=args.duration,
+                interval_s=args.interval,
+                sink=sink,
+                stop=stop,
+            )
     except SourceFailure as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     finally:
         sink.close()
-        close = getattr(source, "close", None)
-        if callable(close):
-            close()
-        if previous_handler is not None:
-            signal.signal(signal.SIGINT, previous_handler)
+        _close_source(source)
 
     interrupted = " (interrupted)" if stop.is_set() else ""
     tolerated = f", {stats.errors} tolerated error(s)" if stats.errors else ""
@@ -220,11 +293,94 @@ def _cmd_collect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_import(args: argparse.Namespace) -> int:
+    source = _instantiate_source(args.source, args.opt)
+    if source is None:
+        return 2
+
+    # Everything from here on runs under one finally so that EVERY exit --
+    # including usage errors like a bad --institution or --interval -- still
+    # closes the source (and the sink, once it exists).
+    stop = threading.Event()
+    sink: RoutingSink | None = None
+    try:
+        if args.reset_ledger:
+            reset = getattr(source, "reset_ledger", None)
+            if not callable(reset):
+                print(
+                    f"error: source {args.source!r} does not support --reset-ledger "
+                    "(it has no reset_ledger() hook)",
+                    file=sys.stderr,
+                )
+                return 2
+            reset()
+            print(f"Reset the import ledger of '{args.source}'.", file=sys.stderr)
+
+        if args.interval <= 0:
+            print(f"error: --interval must be positive, got {args.interval}", file=sys.stderr)
+            return 2
+
+        # Imported data is inherently multi-(series, run): one folder holds
+        # many objects and many runs, so the import verb always writes through
+        # a RoutingSink -- one .bdf.csv (plus sidecar) per (series_id, run_id).
+        try:
+            sink = RoutingSink(
+                args.out_dir,
+                institution=args.institution,
+                metadata={
+                    "institution": args.institution,
+                    "source": dict(source.metadata()),
+                    "imported_with": "battfeed import",
+                    "watch": args.watch,
+                    "requested_interval_second": args.interval,
+                },
+            )
+        except ValueError as exc:  # e.g. an institution containing "__"
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.watch:
+            print(f"Watching '{args.source}' for new files until Ctrl-C ...", file=sys.stderr)
+        try:
+            with _sigint_sets(stop):
+                stats = run_import(
+                    source,
+                    sink,
+                    watch=args.watch,
+                    interval_s=args.interval,
+                    stop=stop,
+                )
+        except SourceFailure as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+    finally:
+        if sink is not None:
+            sink.close()
+        _close_source(source)
+
+    assert sink is not None  # every early exit above returns inside the try
+    interrupted = " (interrupted)" if stop.is_set() else ""
+    tolerated = f", {stats.errors} tolerated error(s)" if stats.errors else ""
+    files = [path for paths in sink.files_by_series.values() for path in paths]
+    if not files:
+        print(f"Nothing to import from '{args.source}'{tolerated}{interrupted}.")
+        return 0
+    print(
+        f"Imported {stats.samples} sample(s) from '{stats.source}' into "
+        f"{len(files)} file(s) under {args.out_dir}{tolerated}{interrupted}:"
+    )
+    for path in files:
+        print(f"  {path}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
     if args.command == "sources":
         return _cmd_sources()
+    if args.command == "import":
+        return _cmd_import(args)
     return _cmd_collect(args)
 
 
