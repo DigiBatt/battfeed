@@ -11,7 +11,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("battfeed")
 except PackageNotFoundError:  # running from a source tree without installation
-    __version__ = "0.4.0"
+    __version__ = "0.5.0"
 
 from .config import Config, ConfigError, load_config
 from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure

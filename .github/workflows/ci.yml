@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,7 +46,11 @@ jobs:
   # With source extras installed, so the other side of every optional-dependency
   # skip is exercised: sources that import wmi / bleak / pyusb / batterydf run
   # their real import paths instead of reporting "unavailable". Extras are
-  # per-OS because the wmi package (pywin32) only installs on Windows.
+  # per-OS because the wmi package (pywin32) only installs on Windows. This job
+  # deliberately runs a SINGLE Python (3.12): the extras-free quality matrix
+  # above is what spans the supported range 3.10-3.13 (the pure-stdlib core is
+  # the compatibility surface), while the optional integrations only need one
+  # representative interpreter to exercise their real import paths.
   quality-extras:
     runs-on: ${{ matrix.os }}
     strategy:

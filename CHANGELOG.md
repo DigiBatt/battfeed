@@ -6,6 +6,8 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-20
+
 ### Added
 
 - Reserved routing keys in the sample contract: `protocols.RESERVED_KEYS`
