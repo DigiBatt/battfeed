@@ -22,6 +22,7 @@ from datetime import timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence, TextIO
 
+from ..config import redact_mapping
 from ..protocols import RESERVED_KEYS, SampleValue
 
 __all__ = ["REQUIRED_COLUMNS", "BdfCsvSink", "dataset_filename", "validate_file"]
@@ -86,7 +87,12 @@ class BdfCsvSink:
     A sidecar ``<name>.meta.json`` (the ``.bdf.csv`` suffix replaced) is
     written next to the data file. It contains the ``metadata`` mapping plus
     the started/finished timestamps, the battfeed version, the column list,
-    the row count, and a ``finalized`` flag. To survive a crash mid-collection
+    the row count, and a ``finalized`` flag. Credentials are masked before
+    writing: any secret-named entry (see :func:`battfeed.config.is_secret_key`)
+    at any depth becomes ``***``, and ``scheme://user:pass@host`` userinfo in
+    any string value is masked -- so a credential a source echoes in its
+    ``metadata()`` never reaches disk. (The CLI additionally scrubs known
+    secret *values*; the sink is the value-independent chokepoint.) To survive a crash mid-collection
     the sidecar is written **early** -- as soon as the data file is first
     opened (``finalized: false``) -- rewritten periodically as rows accumulate,
     and rewritten a final time on :meth:`close` with ``finalized: true`` and
@@ -211,9 +217,14 @@ class BdfCsvSink:
     def _write_sidecar(self, *, finalized: bool) -> None:
         from battfeed import __version__  # local import to avoid a cycle at module load
 
+        # Credential hygiene: the metadata block carries a source's metadata(),
+        # which may include construction kwargs; mask any secret-named value and
+        # any URL userinfo so a token/key/password can never land on disk in the
+        # sidecar. This is the sidecar boundary -- the one chokepoint every sink
+        # caller passes through (RoutingSink's children are BdfCsvSinks too).
         sidecar = {
             "file": self._path.name,
-            "metadata": self._metadata,
+            "metadata": redact_mapping(self._metadata),
             "started_at": self._started_at,
             "finished_at": self._utcnow() if finalized else None,
             "battfeed_version": __version__,

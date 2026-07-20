@@ -13,6 +13,7 @@ try:
 except PackageNotFoundError:  # running from a source tree without installation
     __version__ = "0.4.0"
 
+from .config import Config, ConfigError, load_config
 from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure
 from .importer import ImportStats, run_import
 from .ingest_state import ImportLedger
@@ -30,6 +31,9 @@ __all__ = [
     "Sample",
     "SampleValue",
     "RESERVED_KEYS",
+    "Config",
+    "ConfigError",
+    "load_config",
     "Harvester",
     "CollectStats",
     "ErrorPolicy",

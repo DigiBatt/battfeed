@@ -80,6 +80,28 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   smoke-tests the CLI end to end. New `docs/running-unattended.md` with
   systemd, Windows Task Scheduler, and NSSM recipes, sidecar
   `finalized`-flag semantics, and log-rotation guidance.
+- `battfeed collect`/`import` gain `--config FILE`: a TOML config supplying
+  source options (`[source.<name>]`, optional `type` to alias a source) and
+  run parameters (`[collect]`/`[import]`), so a long invocation becomes a
+  file. Precedence: `--opt` > `[source.<name>]` > source default (kwargs);
+  CLI flag > `[collect]`/`[import]` > default (run params). String values may
+  embed `${ENV:VAR}`, expanded from the environment when the section is used
+  -- keeping secrets out of the file. `tomllib` is stdlib on 3.11+; on 3.10
+  install `tomli` (no hard dependency added). New public API:
+  `battfeed.load_config`, `Config`, `ConfigError`. `--no-watch` overrides a
+  config `watch = true`.
+- Credential hygiene, two layers: options named like a credential (by
+  segment-anchored match on `key`/`token`/`secret`/`password`/`passphrase`/
+  `auth`/`authorization`/`bearer`/`credential`/`session`/`cookie`/
+  `signature`/`private`/`pat`/`pin`/`otp`/`salt` -- so `path`/`compatibility`
+  stay clear) are masked (`***`), AND resolved secret *values* plus
+  `user:pass@` URL userinfo are scrubbed by value even under an innocuous
+  key. Coverage spans the `.meta.json` sidecar (at the sink boundary, so
+  `RoutingSink` inherits it), captured logs at any level including exception
+  tracebacks and every logger's handlers, CLI error messages, and the
+  `battfeed sources` listing; a source's env-var secret fallback (e.g.
+  `DJI_API_KEY`) is folded into the scrubber. Reusable
+  `battfeed.config.redact_mapping`/`redact_text`/`is_secret_key`.
 - `dji` source: import DJI Fly app flight records (`*.txt`/`*.dat`, suffix
   case-insensitive) as per-(pack, flight) BDF feeds via `battfeed import`.
   Wraps the external `dji-log` CLI; emits voltage/current (negated to BDF
