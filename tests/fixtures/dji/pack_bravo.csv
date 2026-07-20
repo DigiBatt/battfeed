@@ -1,0 +1,3 @@
+CUSTOM.dateTime,OSD.flyTime,OSD.latitude,OSD.longitude,OSD.height,OSD.isMotorOn,OSD.droneType,BATTERY.chargeLevel,BATTERY.voltage,BATTERY.current,BATTERY.currentCapacity,BATTERY.fullCapacity,BATTERY.cellNum,BATTERY.cellVoltage1,BATTERY.cellVoltage2,BATTERY.cellVoltage3,BATTERY.temperature,RECOVER.aircraftSerial,RECOVER.batterySerial,RECOVER.aircraftName
+2026-06-18T09:00:00.000Z,4.0,63.4300,10.2000,0.0,true,MavicAir2,97,12.520,4.900,3200,3300,3,4.170,4.180,4.170,22.0,7X9AA1B2003377,2Q8RS55TT200ZZ,dji aircraft
+2026-06-18T09:00:20.000Z,24.0,63.4301,10.2001,25.0,true,MavicAir2,90,12.300,9.800,2980,3300,3,4.100,4.105,4.095,27.4,7X9AA1B2003377,2Q8RS55TT200ZZ,dji aircraft

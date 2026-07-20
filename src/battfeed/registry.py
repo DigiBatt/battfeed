@@ -32,6 +32,7 @@ _BUILTINS: dict[str, str] = {
     "wmi": "battfeed.sources.wmi_battery:WmiBatterySource",
     "mc3000": "battfeed.sources.mc3000:Mc3000Source",
     "android": "battfeed.sources.android:AndroidBatterySource",
+    "dji": "battfeed.sources.dji:DjiFlightLogSource",
 }
 
 

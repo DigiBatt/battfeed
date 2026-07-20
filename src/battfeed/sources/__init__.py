@@ -7,6 +7,7 @@ executable is only invoked when the Android source polls.
 
 from .android import AndroidBatterySource
 from .csvtail import CsvTailSource
+from .dji import DjiFlightLogSource
 from .mc3000 import Mc3000Source
 from .simulator import SimulatedCellSource
 from .wmi_battery import WmiBatterySource
@@ -14,6 +15,7 @@ from .wmi_battery import WmiBatterySource
 __all__ = [
     "AndroidBatterySource",
     "CsvTailSource",
+    "DjiFlightLogSource",
     "Mc3000Source",
     "SimulatedCellSource",
     "WmiBatterySource",

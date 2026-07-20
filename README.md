@@ -143,6 +143,7 @@ field collection survive flaky Bluetooth and USB.
 | `wmi`       | `WmiBatterySource`    | Polls the local Windows battery via WMI (`battfeed[wmi]`, Windows only).     |
 | `mc3000`    | `Mc3000Source`        | SkyRC MC3000 charger/analyzer, one slot per instance, over BLE/USB (or a built-in mock transport for demos). |
 | `android`   | `AndroidBatterySource` | Android device battery via `adb` (dumpsys + sysfs); pure stdlib.           |
+| `dji`       | `DjiFlightLogSource`  | Import DJI Fly flight-log records (`*.txt`/`*.dat`) as one BDF file per (aircraft+battery, flight), via `battfeed import`. Wraps the external `dji-log` binary. Record files come from untrusted media, so battfeed passes the path safely to `dji-log` and quarantines anything malformed. Decrypting v13+ records calls DJI's keychain API. |
 
 ## Non-goals
 

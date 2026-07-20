@@ -80,6 +80,20 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   smoke-tests the CLI end to end. New `docs/running-unattended.md` with
   systemd, Windows Task Scheduler, and NSSM recipes, sidecar
   `finalized`-flag semantics, and log-rotation guidance.
+- `dji` source: import DJI Fly app flight records (`*.txt`/`*.dat`, suffix
+  case-insensitive) as per-(pack, flight) BDF feeds via `battfeed import`.
+  Wraps the external `dji-log` CLI; emits voltage/current (negated to BDF
+  sign)/power/temperature plus per-cell `cell_N_voltage_volt` extension
+  columns, routed by series_id=`<aircraft>:<battery>` (content-hash
+  fallback for missing serials) and run_id=`flight-<hash>`.
+  `test_time_second` is zero-based per flight and monotonic (rows sorted by
+  timestamp); non-finite values are dropped. Untrusted-input hardening: the
+  record path is passed absolutized after a `--` end-of-options token; the
+  API key is redacted from every log and error; `.DAT`, unparseable, and
+  malformed-output files are quarantined (never retried to failure), so one
+  bad file cannot starve the folder. Requires the `dji-log` binary
+  (`DJI_LOG_BIN`/PATH); decrypting v13+ records makes a network call to
+  DJI's keychain API.
 
 ### Changed
 
