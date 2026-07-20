@@ -7,6 +7,10 @@ on:
       - main
 
 jobs:
+  # Without source extras (dev tooling only). This is the leg that catches
+  # accidental hard imports of optional dependencies (invariant I6): every
+  # optional-dependency skip path is exercised because none of the extras
+  # (wmi, bleak, pyusb, batterydf) are installed.
   quality:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -23,7 +27,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install dependencies (no source extras)
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
@@ -38,3 +42,41 @@ jobs:
 
       - name: Test
         run: pytest -q
+
+  # With source extras installed, so the other side of every optional-dependency
+  # skip is exercised: sources that import wmi / bleak / pyusb / batterydf run
+  # their real import paths instead of reporting "unavailable". Extras are
+  # per-OS because the wmi package (pywin32) only installs on Windows.
+  quality-extras:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            extras: "dev,mc3000-ble,mc3000-usb,bdf"
+          - os: windows-latest
+            extras: "dev,wmi,mc3000-ble,mc3000-usb,bdf"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (all installable source extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[${{ matrix.extras }}]"
+
+      - name: Test
+        run: pytest -q
+
+      - name: CLI smoke test
+        run: |
+          battfeed --version
+          battfeed sources
+          battfeed collect --source simulator --duration 2 --interval 0.5 --out smoke.bdf.csv
+          python -c "import json; m = json.load(open('smoke.meta.json')); assert m['finalized'] is True, m"
