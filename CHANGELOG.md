@@ -49,6 +49,37 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   `--reset-ledger` clears it via a source's `reset_ledger()` hook --
   deleting output files never does, and a corrupt ledger file must be
   deleted manually.
+- `StreamingSource`, a base for push-style sources (BLE/CAN/MQTT):
+  background reader sessions with a bounded, counted-overflow buffer (I2);
+  reader errors re-raise at `poll()`, and sample-less sessions raise the new
+  `DeadReaderError` on restart so a dead device escalates through the
+  harvester's `ErrorPolicy` to `SourceFailure` (I4) instead of resetting it;
+  generation-guarded sessions discard late contributions from abandoned
+  zombie readers.
+- The shipped `battfeed.testing` kit: JSONL record/replay tapes
+  (`ReplayTape` with offset validation and torn-tail tolerance on load,
+  `ReplayReader` with time compression, `TapeRecorder` tee helper) and
+  `check_source` -- strict-JSON, bool-, aliasing- and routing-discipline
+  contract checks for third-party source test suites, with a documented
+  list of deliberate blind spots.
+- `HttpPushSink`: generic, stdlib-only HTTP ingest sink -- gzipped
+  newline-delimited JSON batches on a time cadence to any endpoint, with
+  bearer/custom headers (CRLF-validated at construction), at-least-once
+  delivery (buffer kept on failure; `close()` retries then spools to a
+  loadable `.spool.ndjson` with cwd fallback and never raises), strict
+  RFC 8259 payloads (non-finite floats become null, bytes base64,
+  datetimes ISO 8601), bounded memory (oldest rows spill to spool), and
+  URL redaction in logs. Routing keys are deliberately included for
+  server-side demultiplexing.
+- `ParquetSink` (new optional extra `battfeed[parquet]`): one atomically
+  written Parquet file plus the standard `.meta.json` sidecar per bounded
+  capture; on any write failure every buffered row lands in a rescue
+  `.ndjson` and the sidecar records the error -- a capture is never lost.
+- CI: a `quality-extras` job installs all installable source extras per-OS
+  (the extras-free matrix remains the hard-import guard, invariant I6) and
+  smoke-tests the CLI end to end. New `docs/running-unattended.md` with
+  systemd, Windows Task Scheduler, and NSSM recipes, sidecar
+  `finalized`-flag semantics, and log-rotation guidance.
 
 ### Changed
 
