@@ -17,6 +17,7 @@ from .harvester import CollectStats, ErrorPolicy, Harvester, SourceFailure
 from .protocols import RESERVED_KEYS, DataSource, Sample, SampleValue, Sink
 from .registry import available_sources, create_source
 from .sinks.bdf_csv import BdfCsvSink
+from .sources.streaming import DeadReaderError, StreamingSource
 
 __all__ = [
     "DataSource",
@@ -28,6 +29,8 @@ __all__ = [
     "CollectStats",
     "ErrorPolicy",
     "SourceFailure",
+    "StreamingSource",
+    "DeadReaderError",
     "BdfCsvSink",
     "available_sources",
     "create_source",
