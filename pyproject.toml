@@ -33,6 +33,7 @@ wmi = ["wmi"]
 mc3000-ble = ["bleak>=0.21"]
 mc3000-usb = ["pyusb>=1.2"]
 bdf = ["batterydf"]
+parquet = ["pyarrow>=14"]
 dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
