@@ -1,0 +1,64 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check tag matches package version
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match project version v$version"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      # The wheel built here is the one that ships: install it and run a real
+      # collection before anything is published.
+      - name: Smoke test the built wheel
+        run: |
+          python -m venv smoke-venv
+          smoke-venv/bin/python -m pip install dist/*.whl
+          smoke-venv/bin/battfeed --version
+          smoke-venv/bin/battfeed sources
+          smoke-venv/bin/battfeed collect --source simulator --duration 2 --interval 0.5 --out smoke.bdf.csv
+          smoke-venv/bin/python -c "import json; m = json.load(open('smoke.meta.json')); assert m['finalized'] is True, m"
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
