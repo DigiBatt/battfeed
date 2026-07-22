@@ -31,6 +31,7 @@ __all__ = [
     "normalize_voltage_v",
     "parse_adb_devices",
     "parse_dumpsys_battery",
+    "parse_mdns_services",
     "parse_sysfs_listing",
     "plugged_source",
 ]
@@ -84,6 +85,29 @@ def parse_adb_devices(text: str) -> list[AdbDevice]:
             )
         )
     return devices
+
+
+def parse_mdns_services(text: str) -> list[tuple[str, str]]:
+    """Parse ``adb mdns services`` output into ``(instance, host:port)`` pairs.
+
+    Only connectable listeners are returned (``_adb-tls-connect._tcp`` and the
+    legacy ``_adb._tcp``); pairing services (``_adb-tls-pairing._tcp``) are
+    deliberately excluded -- they are not ``adb connect`` targets. Rows whose
+    last column is not a ``host:port`` are skipped.
+    """
+    pairs: list[tuple[str, str]] = []
+    for raw in text.splitlines():
+        parts = raw.split()
+        if len(parts) < 3:
+            continue
+        instance, regtype, address = parts[0], parts[1], parts[-1]
+        if not (regtype.startswith("_adb-tls-connect._tcp") or regtype.startswith("_adb._tcp")):
+            continue
+        host, sep, port = address.rpartition(":")
+        if not sep or not host or not port.isdigit():
+            continue
+        pairs.append((instance, address))
+    return pairs
 
 
 def parse_dumpsys_battery(text: str) -> dict[str, Any]:

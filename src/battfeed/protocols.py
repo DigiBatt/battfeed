@@ -102,7 +102,15 @@ class DataSource(Protocol):
     sessions, and so on; callers invoke it when present. A classmethod
     ``availability() -> str | None`` may report why the source cannot run
     here (missing optional dependency, wrong platform); the CLI uses it to
-    annotate ``battfeed sources``. Neither is part of the required protocol,
+    annotate ``battfeed sources``. A classmethod ``discover(timeout_s=...,
+    **options) -> list[dict]`` may scan for connectable devices; each
+    candidate dict carries ``"option"`` and ``"value"`` (the constructor
+    kwarg the value plugs into, e.g. ``address``/``serial``), optionally
+    ``"ready": False`` when a candidate needs a manual step before it can
+    be collected from, plus free-form descriptive fields. The CLI surfaces
+    this as ``battfeed discover``, and sources may accept the same
+    ``"auto"`` sentinel for the selector kwarg to self-resolve an
+    unambiguous device. None of these are part of the required protocol,
     so trivial sources stay trivial.
     """
 

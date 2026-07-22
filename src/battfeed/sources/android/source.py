@@ -21,6 +21,7 @@ from .parser import (
     normalize_temperature_c,
     normalize_voltage_v,
     parse_dumpsys_battery,
+    parse_mdns_services,
     parse_sysfs_listing,
 )
 
@@ -79,7 +80,12 @@ class AndroidBatterySource:
     Args:
         serial: ADB serial of the device to poll. ``None`` targets the
             single connected device and errors clearly when several are
-            attached.
+            attached. ``"auto"`` resolves that choice once, at construction:
+            the single ready device is pinned for the whole run (a
+            re-resolving ``None`` could silently switch devices if another
+            one appears mid-run), and zero or several ready devices fail
+            with the candidate list (see ``battfeed discover --source
+            android``).
         adb_path: The ``adb`` executable to invoke (default: from PATH).
         use_sysfs: Also read kernel power_supply fields on each poll.
         backend: Injectable :class:`AdbBackend` for tests; defaults to a
@@ -94,10 +100,12 @@ class AndroidBatterySource:
         backend: AdbBackend | None = None,
     ) -> None:
         self.name = "android"
-        self._serial = serial
         self._adb_path = adb_path
         self._use_sysfs = use_sysfs
         self._backend: AdbBackend = backend or SubprocessAdbBackend(adb_path)
+        if serial == "auto":
+            serial = _resolve_auto_serial(self._backend)
+        self._serial = serial
         self._metadata_cache: dict[str, Any] | None = None
 
     @classmethod
@@ -109,6 +117,59 @@ class AndroidBatterySource:
         if shutil.which("adb") is None:
             return 'requires the Android platform-tools "adb" executable on PATH'
         return None
+
+    @classmethod
+    def discover(
+        cls,
+        timeout_s: float = 6.0,
+        adb_path: str = "adb",
+        backend: AdbBackend | None = None,
+    ) -> list[dict[str, Any]]:
+        """List Android devices adb can reach (see ``battfeed discover``).
+
+        Two kinds of candidate, told apart by ``ready``:
+
+        * devices already connected to the adb server (``ready`` is True --
+          their ``value`` plugs straight into the ``serial`` option);
+        * wireless-debugging listeners advertised over mDNS but not yet
+          connected (``ready`` is False -- run ``adb connect <value>``
+          first). mDNS is opportunistic: it is unreliable on Windows, so a
+          device absent here may still be connectable once its port is read
+          off the phone's Wireless debugging screen.
+
+        ``timeout_s`` caps each adb invocation; raises when the ``adb``
+        executable itself is missing.
+        """
+        resolved: AdbBackend = backend or SubprocessAdbBackend(adb_path, timeout=timeout_s)
+        candidates: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for device in resolved.list_devices():
+            seen.add(device.serial)
+            candidates.append(
+                {
+                    "option": "serial",
+                    "value": device.serial,
+                    "ready": device.state == "device",
+                    "state": device.state,
+                    "model": device.qualifiers.get("model"),
+                }
+            )
+        mdns = getattr(resolved, "mdns_services", None)
+        if callable(mdns):
+            for instance, address in parse_mdns_services(mdns()):
+                if address in seen:
+                    continue
+                candidates.append(
+                    {
+                        "option": "serial",
+                        "value": address,
+                        "ready": False,
+                        "state": f"advertised via mDNS -- run: adb connect {address}",
+                        "model": None,
+                        "mdns_instance": instance,
+                    }
+                )
+        return candidates
 
     def metadata(self) -> Mapping[str, Any]:
         """Describe the polled device: identity, battery technology, health.
@@ -262,6 +323,39 @@ class AndroidBatterySource:
     def _getprop(self, device: AdbDevice, name: str) -> str | None:
         value = self._backend.shell(device, ["getprop", name]).strip()
         return value or None
+
+
+def _resolve_auto_serial(backend: AdbBackend) -> str:
+    """Resolve ``serial="auto"`` to the single ready device's serial.
+
+    Raises ``ValueError`` (never silently picks) when zero or several ready
+    devices are connected, so an unattended run can only ever bind to an
+    unambiguous device. ADB failures (missing executable, dead server)
+    surface as ``ValueError`` too: this runs at construction time, where
+    the CLI expects usage-shaped errors rather than runtime ones.
+    """
+    try:
+        devices = backend.list_devices()
+    except ADBError as exc:
+        raise ValueError(f"serial='auto': {exc}") from exc
+    ready = [device for device in devices if device.state == "device"]
+    if len(ready) == 1:
+        serial = ready[0].serial
+        logger.info("serial='auto' resolved to %s", serial)
+        return serial
+    if not ready:
+        states = ", ".join(f"{d.serial}={d.state}" for d in devices) or "none"
+        raise ValueError(
+            f"serial='auto': no ready Android device (adb devices: {states}). "
+            "Enable Wireless debugging and 'adb connect <ip:port>' first, or "
+            "attach a device over USB; 'battfeed discover --source android' "
+            "lists what adb can see."
+        )
+    serials = ", ".join(sorted(device.serial for device in ready))
+    raise ValueError(
+        f"serial='auto' is ambiguous: {len(ready)} ready devices ({serials}). "
+        "Pass serial=... to pick one."
+    )
 
 
 def _first_text(*values: Any) -> str | None:

@@ -6,6 +6,26 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ## [Unreleased]
 
+### Added
+
+- Device discovery: a new `battfeed discover` CLI verb scans for connectable
+  devices and prints ready-to-paste collect commands (`--json` for
+  scripting). MC3000 chargers are found by a BLE scan filtered on the
+  advertised FFE0 service (name matching is useless -- the unit advertises
+  as "Charger"); Android candidates are the devices connected to the adb
+  server plus wireless-debugging listeners seen over mDNS (opportunistic --
+  unreliable on Windows). Sources opt in through a new optional
+  `discover(timeout_s=..., **options)` classmethod hook on the `DataSource`
+  seam; sources without it are simply skipped.
+- Auto-selection: `--opt address=auto` (mc3000, BLE) and `--opt serial=auto`
+  (android) resolve the single unambiguous device at construction time and
+  fail with the candidate list when zero or several are found -- never a
+  silent guess. `serial=auto` pins the resolved device for the whole run,
+  unlike `serial=None` which re-resolves every poll.
+- `SubprocessAdbBackend.mdns_services()` and
+  `parser.parse_mdns_services()`: tolerant enumeration of
+  `_adb-tls-connect._tcp` listeners; pairing services are excluded.
+
 ## [0.5.0] - 2026-07-20
 
 ### Added

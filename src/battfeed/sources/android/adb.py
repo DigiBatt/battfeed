@@ -97,6 +97,21 @@ class SubprocessAdbBackend:
         """Connect to a Wi-Fi ADB device at ``host[:port]``."""
         return self._run([self.adb_path, "connect", address], timeout=self.timeout)
 
+    def mdns_services(self) -> str:
+        """Raw ``adb mdns services`` output, or ``""`` when it fails.
+
+        mDNS discovery is opportunistic -- it is unreliable on Windows and
+        absent on older adb builds -- so a command failure degrades to "no
+        services seen" instead of raising. A missing ``adb`` executable
+        still raises :class:`ADBNotFound` (that is not an mDNS problem).
+        """
+        try:
+            return self._run([self.adb_path, "mdns", "services"], timeout=self.timeout)
+        except ADBNotFound:
+            raise
+        except ADBError:
+            return ""
+
     def _run(
         self,
         cmd: list[str],

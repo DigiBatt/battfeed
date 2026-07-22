@@ -26,6 +26,38 @@ def _module_available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
+def _resolve_auto_address(timeout_s: float = 6.0) -> str:
+    """Resolve ``address="auto"`` to the single advertising charger's address.
+
+    Raises ``ValueError`` (never silently picks) when the scan finds zero or
+    several chargers, so an unattended run can only ever bind to an
+    unambiguous device.
+    """
+    from .discovery import discover_ble  # lazy: bleak only when scanning
+
+    candidates = discover_ble(timeout_s)
+    if len(candidates) == 1:
+        address = str(candidates[0]["value"])
+        logger.info("address='auto' resolved to %s", address)
+        return address
+    if not candidates:
+        raise ValueError(
+            f"address='auto': no MC3000 found advertising within {timeout_s:.0f} s. "
+            "Power the charger on and make sure nothing else is connected to it "
+            "(a connected charger stops advertising), or pass address=... explicitly."
+        )
+    listing = ", ".join(
+        f"{c['value']} (RSSI {c['rssi_dbm']} dBm)"
+        if c.get("rssi_dbm") is not None
+        else str(c["value"])
+        for c in candidates
+    )
+    raise ValueError(
+        f"address='auto' is ambiguous: {len(candidates)} chargers advertising: "
+        f"{listing}. Pass address=... to pick one."
+    )
+
+
 def sample_from_reading(
     reading: SlotReading, *, time_base: str = "collection"
 ) -> dict[str, float | int | str]:
@@ -105,8 +137,10 @@ class Mc3000Source:
             "battfeed[mc3000-usb]"``) or ``"mock"`` (a built-in simulated
             charger -- no hardware, no extras).
         address: BLE device address of the charger, e.g.
-            ``"AA:BB:CC:DD:EE:FF"``. Required for ``transport="ble"``,
-            ignored otherwise.
+            ``"AA:BB:CC:DD:EE:FF"``, or ``"auto"`` to scan and use the single
+            advertising charger (fails with the candidate list when zero or
+            several are found -- see ``battfeed discover --source mc3000``).
+            Required for ``transport="ble"``, ignored otherwise.
         time_base: ``"collection"`` (default) leaves ``test_time_second`` to
             the harvester's collection clock; ``"device"`` uses the charger's
             own program run timer instead (see :func:`sample_from_reading`
@@ -145,6 +179,8 @@ class Mc3000Source:
                 f"package, which is not installed. Install it with: "
                 f'pip install "battfeed[{extra}]".'
             )
+        if transport == "ble" and address == "auto":
+            address = _resolve_auto_address()
         self.name = "mc3000"
         self._slot = slot
         self._transport_kind = transport
@@ -171,6 +207,20 @@ class Mc3000Source:
         if not missing:
             return None
         return "; ".join(missing) + ' (transport="mock" needs neither)'
+
+    @classmethod
+    def discover(cls, timeout_s: float = 6.0) -> list[dict[str, Any]]:
+        """Scan BLE for advertising MC3000 chargers (see ``battfeed discover``).
+
+        Returns candidates whose ``value`` plugs into the ``address`` option,
+        strongest signal first. A charger already connected to another program
+        stops advertising and will not appear. Requires the
+        ``battfeed[mc3000-ble]`` extra; USB units are not scanned (the MC3000
+        enumerates with degenerate USB ids and needs no address).
+        """
+        from .discovery import discover_ble  # lazy: bleak only when scanning
+
+        return discover_ble(timeout_s)
 
     def metadata(self) -> Mapping[str, Any]:
         info = self._read_machine_info()

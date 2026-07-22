@@ -51,6 +51,36 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("sources", help="list available data sources")
 
+    discover = subparsers.add_parser(
+        "discover",
+        help="scan for devices a source can collect from (BLE chargers, adb devices)",
+    )
+    discover.add_argument(
+        "--source",
+        default=None,
+        help="limit the scan to one source (see 'battfeed sources'); required with --opt",
+    )
+    discover.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="time budget per source scan/probe (default: 6.0)",
+    )
+    discover.add_argument(
+        "--opt",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="discovery option for the selected source, repeatable (requires "
+        "--source), e.g. --opt adb_path=C:/platform-tools/adb.exe",
+    )
+    discover.add_argument(
+        "--json",
+        action="store_true",
+        help="machine-readable output: {source: [candidate, ...]}",
+    )
+
     # Config-overridable options default to None so an explicit CLI value can be
     # told apart from an unset one; the real defaults are applied after the
     # config file is merged (see _resolve). Precedence is documented in config.py.
@@ -407,6 +437,95 @@ def _cmd_sources() -> int:
     return 0
 
 
+def _cmd_discover(args: argparse.Namespace) -> int:
+    """Scan discovery-capable sources and print connectable candidates.
+
+    With ``--source`` the named source must support discovery (rc 2
+    otherwise); without it, every discovery-capable, available source is
+    scanned and per-source failures are reported as notes rather than
+    aborting the sweep. Finding nothing is rc 0 -- an empty bench is not an
+    error, and scripts read the JSON, not the exit code.
+    """
+    sources = available_sources()
+    if args.source is not None and args.source not in sources:
+        print(
+            f"error: unknown source {args.source!r}. Available sources: {sorted(sources)}",
+            file=sys.stderr,
+        )
+        return 2
+    opts = _parse_opts(args.opt)
+    if opts and args.source is None:
+        print("error: --opt with 'discover' requires --source", file=sys.stderr)
+        return 2
+    try:
+        timeout = _positive_number(args.timeout if args.timeout is not None else 6.0, "timeout")
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    names = [args.source] if args.source is not None else sorted(sources)
+    results: dict[str, list[dict[str, Any]]] = {}
+    notes: dict[str, str] = {}
+    for name in names:
+        cls = sources[name]
+        hook = getattr(cls, "discover", None)
+        if not callable(hook):
+            if args.source is not None:
+                print(f"error: source {name!r} does not support discovery", file=sys.stderr)
+                return 2
+            continue
+        # The availability gate applies to the sweep only: an explicit --source
+        # is always attempted, because --opt can supply exactly what
+        # availability() found missing (e.g. adb_path when adb is not on PATH),
+        # and a real failure surfaces as its own actionable error below.
+        if args.source is None:
+            availability = getattr(cls, "availability", None)
+            if callable(availability):
+                reason = availability()
+                if reason:
+                    notes[name] = f"skipped: {reason}"
+                    continue
+        try:
+            results[name] = list(hook(timeout_s=timeout, **opts))
+        except TypeError as exc:
+            print(f"error: bad --opt for source {name!r}: {exc}", file=sys.stderr)
+            return 2
+        except Exception as exc:  # per-source scan failures must not kill the sweep
+            if args.source is not None:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+            notes[name] = f"failed: {exc}"
+
+    if args.json:
+        print(json.dumps({"candidates": results, "notes": notes}, indent=2))
+        return 0
+    if not results and not notes:
+        print("No discovery-capable sources are installed.")
+        return 0
+    for name in sorted(set(results) | set(notes)):
+        if name in notes:
+            print(f"{name}: {notes[name]}")
+            continue
+        candidates = results[name]
+        if not candidates:
+            print(f"{name}: nothing found")
+            continue
+        print(f"{name}:")
+        for candidate in candidates:
+            described = ", ".join(
+                f"{key}={value}"
+                for key, value in candidate.items()
+                if key not in ("option", "value", "ready") and value is not None
+            )
+            print(f"  {candidate['value']}" + (f"  ({described})" if described else ""))
+            if candidate.get("ready", True):
+                print(
+                    f"      -> battfeed collect --source {name} "
+                    f"--opt {candidate['option']}={candidate['value']}"
+                )
+    return 0
+
+
 def _default_out_path(institution: str, cell: str) -> Path:
     today = datetime.date.today()
     for seq in range(1, 1000):
@@ -661,6 +780,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
     if args.command == "sources":
         return _cmd_sources()
+    if args.command == "discover":
+        return _cmd_discover(args)
     if args.command == "import":
         return _cmd_import(args)
     return _cmd_collect(args)

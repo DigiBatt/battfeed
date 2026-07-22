@@ -82,6 +82,29 @@ battfeed collect --source csvtail --opt path=instr.log --opt 'column_map={"V":"v
 other installed packages — with each source's options, and marks unavailable
 ones (e.g. `wmi` off-Windows, `mc3000` without its transport extra).
 
+### Finding devices
+
+`battfeed discover` scans for devices the hardware sources can collect from
+and prints ready-to-paste collect commands (`--json` for scripting):
+
+```
+battfeed discover                          # scan every discovery-capable source
+battfeed discover --source mc3000          # BLE scan for advertising chargers
+battfeed discover --source android --opt adb_path=C:/platform-tools/adb.exe
+```
+
+The MC3000 is found by its advertised FFE0 service (a charger already
+connected to another program stops advertising — close that program first).
+Android candidates are devices already connected to adb, plus any
+wireless-debugging listeners seen over mDNS (unreliable on Windows; when a
+phone is not listed, read `ip:port` off its Wireless debugging screen and
+`adb connect` it).
+
+When exactly one device is in range, skip the scan-then-paste step entirely:
+`--opt address=auto` (mc3000) and `--opt serial=auto` (android) resolve the
+single unambiguous device at start-up and fail with the candidate list
+otherwise — never a silent guess, so unattended runs stay deterministic.
+
 ## What comes out
 
 A conforming BDF CSV with snake_case `{quantity}_{unit}` headers. The required trio
