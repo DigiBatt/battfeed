@@ -25,7 +25,6 @@ import logging
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 __all__ = [
@@ -148,7 +147,7 @@ def parse_flight(
     shown = [("***" if i and cmd[i - 1] == "-a" else a) for i, a in enumerate(cmd)]
     log.info("parse: %s", " ".join(shown))
 
-    creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # Windows-only flag
     proc = subprocess.run(cmd, capture_output=True, text=True, creationflags=creationflags)
     stderr = (proc.stderr or "").strip()
     if api_key:

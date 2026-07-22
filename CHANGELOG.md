@@ -26,6 +26,15 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
   `parser.parse_mdns_services()`: tolerant enumeration of
   `_adb-tls-connect._tcp` listeners; pairing services are excluded.
 
+### Fixed
+
+- CI type-checking on Linux: the DJI parser used
+  `subprocess.CREATE_NO_WINDOW` in a conditional expression, which mypy's
+  `sys.platform` narrowing does not cover (it only narrows `if` statements),
+  so every Linux mypy leg had been red since 0.5.0. Replaced with the
+  `getattr(subprocess, "CREATE_NO_WINDOW", 0)` pattern already used by the
+  Android backend; behavior is unchanged on both platforms.
+
 ## [0.5.0] - 2026-07-20
 
 ### Added
