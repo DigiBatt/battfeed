@@ -29,6 +29,8 @@ stack understands.
 The core has **zero runtime dependencies** — everything is Python standard library.
 Requires Python >= 3.10.
 
+**Documentation:** [digibatt.github.io/battfeed](https://digibatt.github.io/battfeed/)
+
 ## Install
 
 ```
@@ -287,6 +289,7 @@ so a one-liner in your own test suite is a complete contract test:
 
 ```python
 from battfeed.testing import check_source
+
 
 def test_my_source_contract():
     check_source(MyCyclerSource(...))  # drive it with a mock or a replay tape, never live hardware

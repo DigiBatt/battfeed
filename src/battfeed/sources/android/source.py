@@ -7,11 +7,11 @@ import shutil
 from typing import Any, Mapping
 
 from .adb import (
+    AdbBackend,
     ADBCommandError,
+    AdbDevice,
     ADBDeviceDisconnected,
     ADBError,
-    AdbBackend,
-    AdbDevice,
     SubprocessAdbBackend,
 )
 from .parser import (

@@ -19,7 +19,6 @@ from battfeed.sources.mc3000 import Mc3000Source
 from battfeed.sources.mc3000 import discovery as mc3000_discovery
 from battfeed.sources.mc3000 import source as mc3000_source
 
-
 # --- mc3000 BLE discovery -------------------------------------------------
 
 

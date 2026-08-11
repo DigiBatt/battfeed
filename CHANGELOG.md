@@ -8,6 +8,16 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Added
 
+- Documentation site at https://digibatt.github.io/battfeed/ (Sphinx with
+  MyST Markdown and the pydata theme, structured along Diátaxis lines:
+  tutorials with real captured outputs, how-to guides, reference,
+  explanation; `CHANGELOG.md`, `ROADMAP.md`, and the new `CONTRIBUTING.md`
+  are rendered into the site from the repository root). Deployed to GitHub
+  Pages on every push to `main`; build locally with
+  `pip install -e ".[docs]" && sphinx-build -W -b html docs site`. The
+  service recipes and development guide moved into the site
+  (`docs/howto/run-unattended.md`, `docs/project/development.md`).
+
 - Device discovery: a new `battfeed discover` CLI verb scans for connectable
   devices and prints ready-to-paste collect commands (`--json` for
   scripting). MC3000 chargers are found by a BLE scan filtered on the

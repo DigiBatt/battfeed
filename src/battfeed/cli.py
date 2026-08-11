@@ -28,7 +28,7 @@ from .harvester import Harvester, SourceFailure
 from .importer import run_import
 from .protocols import DataSource
 from .registry import available_sources, create_source
-from .sinks.bdf_csv import dataset_filename, BdfCsvSink
+from .sinks.bdf_csv import BdfCsvSink, dataset_filename
 from .sinks.routing import RoutingSink
 
 __all__ = ["main", "build_parser"]

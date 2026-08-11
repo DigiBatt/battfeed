@@ -12,7 +12,7 @@ import pytest
 
 from battfeed.protocols import DataSource
 from battfeed.sources.android import AndroidBatterySource
-from battfeed.sources.android.adb import ADBCommandError, ADBDeviceDisconnected, ADBError, AdbDevice
+from battfeed.sources.android.adb import ADBCommandError, AdbDevice, ADBDeviceDisconnected, ADBError
 from battfeed.sources.android.source import _signed_current
 
 DUMPSYS_DISCHARGING = """
