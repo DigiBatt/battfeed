@@ -8,6 +8,12 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Added
 
+- Android source: opt-in state of charge. `--opt include_soc=true` emits a
+  `state_of_charge_percent` column from sysfs `capacity`, falling back to
+  dumpsys `level`/`scale` on vendors that SELinux-block sysfs. Off by
+  default: like `charge_status` it sits outside the canonical BDF
+  vocabulary, so strict-BDF consumers see no new column unless they ask.
+
 - Documentation site at https://digibatt.github.io/battfeed/ (Sphinx with
   MyST Markdown and the pydata theme, structured along Diátaxis lines:
   tutorials with real captured outputs, how-to guides, reference,

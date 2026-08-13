@@ -5,7 +5,7 @@ Six sources ship with battfeed, registered through the same `battfeed.sources` e
 ```console
 $ battfeed sources
 android    Read an Android device battery through ``adb shell`` (dumpsys + sysfs).  [unavailable: requires the Android platform-tools "adb" executable on PATH]
-             options: serial=None, adb_path='adb', use_sysfs=True, backend=None
+             options: serial=None, adb_path='adb', use_sysfs=True, include_soc=False, backend=None
 csvtail    Follow a CSV file that another process is appending to.
              options: path, column_map, unit_scale=None, name='csvtail', encoding='utf-8'
 dji        Import DJI Fly app flight records as per-(pack, flight) BDF feeds.
@@ -48,7 +48,7 @@ Supports discovery (`battfeed discover --source mc3000`, BLE scan on the adverti
 
 ## `android`
 
-Android device battery via `adb shell` (dumpsys + sysfs), pure stdlib — only the platform-tools `adb` executable is needed. `serial=None` re-resolves the device every poll; `serial=auto` pins the single unambiguous device for the run; a fixed serial pins that device. Supports discovery (adb-connected devices plus mDNS wireless-debugging listeners).
+Android device battery via `adb shell` (dumpsys + sysfs), pure stdlib — only the platform-tools `adb` executable is needed. `serial=None` re-resolves the device every poll; `serial=auto` pins the single unambiguous device for the run; a fixed serial pins that device. Supports discovery (adb-connected devices plus mDNS wireless-debugging listeners). `include_soc=true` adds a `state_of_charge_percent` column (non-vocabulary, off by default; falls back to dumpsys `level`/`scale` where sysfs is SELinux-blocked).
 
 ## `dji`
 

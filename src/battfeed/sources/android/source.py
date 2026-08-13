@@ -17,6 +17,8 @@ from .adb import (
 from .parser import (
     battery_health,
     battery_status,
+    dumpsys_soc_pct,
+    normalize_capacity_pct,
     normalize_current_a,
     normalize_temperature_c,
     normalize_voltage_v,
@@ -32,7 +34,8 @@ logger = logging.getLogger(__name__)
 SYSFS_BATTERY_PATH = "/sys/class/power_supply/battery/"
 
 #: sysfs power_supply fields read on each poll -- only the ones that feed
-#: the emitted columns (voltage, current, temperature, charge status).
+#: the emitted columns (voltage, current, temperature, charge status);
+#: ``capacity`` is appended per-instance when ``include_soc`` is on.
 _POLL_SYSFS_FIELDS = ("voltage_now", "current_now", "current_avg", "temp", "status")
 
 
@@ -66,10 +69,15 @@ class AndroidBatterySource:
       sample contract because status changes over time and is analytically
       valuable; note that strict BDF validation flags columns outside the
       canonical vocabulary.
+    * ``state_of_charge_percent`` -- opt-in via ``include_soc``: sysfs
+      ``capacity``, falling back to dumpsys ``level``/``scale``, clamped to
+      0..100. Non-vocabulary like ``charge_status`` (same justification:
+      time-varying and analytically valuable), which is why it stays off by
+      default -- strict-BDF consumers see no new column unless they ask.
 
-    Per-poll extras such as level percent, health and plugged source are
-    deliberately NOT emitted as columns (they are not in the BDF
-    vocabulary); slow-changing facts live in :meth:`metadata` instead.
+    Other per-poll extras (health, plugged source) are deliberately NOT
+    emitted as columns (they are not in the BDF vocabulary); slow-changing
+    facts live in :meth:`metadata` instead.
 
     Resilience: :meth:`poll` RAISES on adb failures and device
     disconnects. The retry/reconnect machinery of the original standalone
@@ -88,6 +96,8 @@ class AndroidBatterySource:
             android``).
         adb_path: The ``adb`` executable to invoke (default: from PATH).
         use_sysfs: Also read kernel power_supply fields on each poll.
+        include_soc: Emit ``state_of_charge_percent`` as a sample column
+            (non-vocabulary; see the column list above).
         backend: Injectable :class:`AdbBackend` for tests; defaults to a
             :class:`SubprocessAdbBackend` running ``adb_path``.
     """
@@ -97,11 +107,14 @@ class AndroidBatterySource:
         serial: str | None = None,
         adb_path: str = "adb",
         use_sysfs: bool = True,
+        include_soc: bool = False,
         backend: AdbBackend | None = None,
     ) -> None:
         self.name = "android"
         self._adb_path = adb_path
         self._use_sysfs = use_sysfs
+        self._include_soc = include_soc
+        self._poll_sysfs_fields = _POLL_SYSFS_FIELDS + (("capacity",) if include_soc else ())
         self._backend: AdbBackend = backend or SubprocessAdbBackend(adb_path)
         if serial == "auto":
             serial = _resolve_auto_serial(self._backend)
@@ -258,6 +271,12 @@ class AndroidBatterySource:
             sample["surface_temperature_celsius"] = temperature_c
         if status is not None:
             sample["charge_status"] = status
+        if self._include_soc:
+            soc = normalize_capacity_pct(sysfs.get("capacity"))
+            if soc is None:
+                soc = dumpsys_soc_pct(dumpsys)
+            if soc is not None:
+                sample["state_of_charge_percent"] = soc
         return [sample] if sample else []
 
     def close(self) -> None:
@@ -297,7 +316,7 @@ class AndroidBatterySource:
         if listing is None:
             return {}
         fields: dict[str, str] = {}
-        for name in _POLL_SYSFS_FIELDS:
+        for name in self._poll_sysfs_fields:
             if name not in listing:
                 continue
             try:

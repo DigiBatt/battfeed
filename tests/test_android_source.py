@@ -164,6 +164,33 @@ def test_dumpsys_fallback_when_sysfs_is_blocked():
     assert sample["charge_status"] == "Discharging"
 
 
+def test_include_soc_emits_state_of_charge_from_sysfs():
+    source = AndroidBatterySource(include_soc=True, backend=FakeAdbBackend([_device_spec()]))
+
+    (sample,) = source.poll()
+    assert sample["state_of_charge_percent"] == pytest.approx(73.0)  # sysfs capacity
+
+
+def test_include_soc_falls_back_to_dumpsys_level_and_scale():
+    # Blocked sysfs + a non-100 scale: 73/200 -> 36.5 %.
+    dumpsys = DUMPSYS_DISCHARGING.replace("scale: 100", "scale: 200")
+    spec = _device_spec(dumpsys=dumpsys, sysfs_blocked=True)
+    source = AndroidBatterySource(include_soc=True, backend=FakeAdbBackend([spec]))
+
+    (sample,) = source.poll()
+    assert sample["state_of_charge_percent"] == pytest.approx(36.5)
+
+
+def test_soc_stays_off_by_default():
+    backend = FakeAdbBackend([_device_spec()])
+    source = AndroidBatterySource(backend=backend)
+
+    (sample,) = source.poll()
+    assert "state_of_charge_percent" not in sample
+    # The default poll never even reads sysfs capacity.
+    assert not any(call[0] == "cat" and str(call[1]).endswith("capacity") for call in backend.shell_calls)
+
+
 def test_use_sysfs_false_never_touches_sysfs():
     backend = FakeAdbBackend([_device_spec()])
     source = AndroidBatterySource(use_sysfs=False, backend=backend)
