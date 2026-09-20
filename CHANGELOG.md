@@ -8,6 +8,24 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Added
 
+- WMI source: state of charge, cycle count, and real static data. Each poll
+  now also carries `state_of_charge_percent`
+  (`RemainingCapacity`/`FullChargedCapacity`, matched per pack by
+  `InstanceName` and dropped when either number is missing, zero, or the
+  0x80000000 "unknown" sentinel) and `cycle_count` where the firmware
+  implements `BatteryCycleCount` -- the class is probed once and never asked
+  again when it is absent. The sentinel is now treated as absent everywhere
+  it appears, so an idle pack no longer reports a 2.1 GW discharge rate.
+  `metadata()` gained `design_capacity_mwh`, `full_charged_capacity_mwh`,
+  `design_voltage_mv`, `chemistry`, `device_name`, `serial`, `manufacturer`,
+  `os_host`, and a `packs` list covering multi-battery machines. Every
+  static read is guarded individually and falls back to `Win32_Battery` in
+  `root\cimv2`, because `BatteryStaticData` raises a bare "Generic failure"
+  on some firmware -- and on the HP laptop this was developed against, its
+  `DesignedVoltage` property raises while the rest of the row reads fine.
+  New `discover()` hook, so `battfeed discover --source wmi` lists the
+  installed packs and `--opt instance=0` pins one of them.
+
 - Android source: opt-in state of charge. `--opt include_soc=true` emits a
   `state_of_charge_percent` column from sysfs `capacity`, falling back to
   dumpsys `level`/`scale` on vendors that SELinux-block sysfs. Off by

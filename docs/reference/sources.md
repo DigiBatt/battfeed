@@ -15,7 +15,7 @@ mc3000     Read one bay of a SkyRC MC3000 charger/analyzer.  [unavailable: BLE n
 simulator  Simulate a CR2032-ish coin cell under constant-current discharge.
              options: name='simulator', steps_to_empty=3600, discharge_current_a=0.002, full_voltage_v=3.0, empty_voltage_v=2.0, ambient_c=25.0
 wmi        Read the laptop/tablet battery through the Windows ``root\wmi`` classes.
-             options: name='wmi'
+             options: name='wmi', instance=None
 ```
 
 ## `simulator`
@@ -28,7 +28,7 @@ Tails a growing CSV log. You supply `column_map` (log column → canonical BDF n
 
 ## `wmi` (Windows)
 
-Polls the local laptop/tablet battery via the `root\wmi` classes: voltage, signed current, power. Needs `battfeed[wmi]`, Windows, and a machine that has a battery. Walkthrough: [Collect your laptop's own battery](../howto/laptop-battery.md).
+Polls the local laptop/tablet battery via the `root\wmi` classes: voltage, signed current, power, `state_of_charge_percent`, and `cycle_count` where the firmware implements `BatteryCycleCount`. Needs `battfeed[wmi]`, Windows, and a machine that has a battery. `metadata()` adds the pack's nameplate (design and full-charge capacity, design voltage, chemistry, device name, serial, manufacturer) as far as the firmware exposes it, falling back to `Win32_Battery` when `BatteryStaticData` refuses. Supports discovery (`battfeed discover --source wmi` lists the installed packs; `--opt instance=0` pins one on a multi-battery machine). Walkthrough: [Collect your laptop's own battery](../howto/laptop-battery.md).
 
 ## `mc3000` (SkyRC MC3000 charger/analyzer)
 

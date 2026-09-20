@@ -10,16 +10,35 @@ pip install "battfeed[wmi]"
 
 ```console
 $ battfeed collect --source wmi --duration 6 --interval 2 --institution SINTEF --cell LaptopMain
-Collected 3 sample(s) from 'wmi' in 6.0 s -> SINTEF__LaptopMain__20260811_001.bdf.csv
+Collected 3 sample(s) from 'wmi' in 6.0 s -> SINTEF__LaptopMain__20260818_001.bdf.csv
 
-$ head -4 SINTEF__LaptopMain__20260811_001.bdf.csv
-test_time_second,voltage_volt,current_ampere,power_watt
-0.09399999992456287,16.59,0.0,0.0
-2.1089999999385327,16.59,0.0,0.0
-4.155999999959022,16.59,0.0,0.0
+$ head -4 SINTEF__LaptopMain__20260818_001.bdf.csv
+test_time_second,voltage_volt,current_ampere,cycle_count,power_watt,state_of_charge_percent
+0.1410000000614673,16.899,0.7260192910823126,352,12.269,92.7094097260862
+2.297000000020489,16.899,0.7260192910823126,352,12.269,92.7094097260862
+4.484000000171363,16.899,0.7260192910823126,352,12.269,92.7094097260862
 ```
 
-That is a genuine reading from the machine these docs were built on: a 4-cell pack at 16.59 V, drawing no battery current because the laptop was on mains power. Unplug the charger and `current_ampere` goes negative (discharging, per the BDF sign convention); plug it back in mid-charge and it goes positive.
+That is a genuine reading from the machine these docs were built on: a 4-cell pack at 16.9 V taking 12.3 W of charge, 93 % full, 352 cycles into its life. Positive current means charging, per the BDF sign convention; unplug the charger and it goes negative.
+
+Current is derived, not measured. The ACPI classes report a charge or discharge *rate* in milliwatt, so `current_ampere` is `power_watt / voltage_volt`.
+
+## What the pack knows about itself
+
+`battfeed discover --source wmi` reads the nameplate without collecting anything:
+
+```console
+$ battfeed discover --source wmi
+wmi:
+  0  (instance_name=ACPI\PNP0C0A\1_0, device_name=Primary, manufacturer=Hewlett-Packard, chemistry=LIon, design_capacity_mwh=94338, full_charged_capacity_mwh=62903, cycle_count=352)
+      -> battfeed collect --source wmi --opt instance=0
+```
+
+94.3 Wh when it left the factory in 2021, 62.9 Wh today: this pack has lost a third of its capacity. The same fields, plus serial and design voltage, land in the run's `.meta.json` sidecar.
+
+Not every laptop is this forthcoming. `BatteryStaticData` raises a bare "Generic failure" on plenty of firmware, `BatteryCycleCount` often does not exist at all, and the ACPI "unknown" value 0x80000000 can turn up in any rate or capacity field. Each of those is handled by omitting the field, never by reporting a wrong number, so a reticent machine still collects voltage, current, and power.
+
+Machines with two packs get one sample per pack on every poll; `--opt instance=0` (or `--opt instance=1`) pins a single one.
 
 ## Notes
 

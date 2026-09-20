@@ -30,7 +30,7 @@ mc3000     Read one bay of a SkyRC MC3000 charger/analyzer.  [unavailable: BLE n
 simulator  Simulate a CR2032-ish coin cell under constant-current discharge.
              options: name='simulator', steps_to_empty=3600, discharge_current_a=0.002, full_voltage_v=3.0, empty_voltage_v=2.0, ambient_c=25.0
 wmi        Read the laptop/tablet battery through the Windows ``root\wmi`` classes.
-             options: name='wmi'
+             options: name='wmi', instance=None
 ```
 
 Read this listing carefully, because it teaches battfeed's manners: sources that cannot run *here* say so and say why (`adb` not on PATH; a Bluetooth extra not installed) instead of failing later, and every source advertises its constructor options right where you need them.
