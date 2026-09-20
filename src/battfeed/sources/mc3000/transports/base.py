@@ -19,6 +19,11 @@ class Transport(ABC):
     #: "ble" or "usb" -- selects the request framing and expected frame length.
     frame_kind: str = "usb"
 
+    #: Whether the machine-info opcode (0x5a) can produce a decodable reply on
+    #: this transport. The reader skips the request entirely when False, so a
+    #: transport that cannot answer does not cost a poll timeout per run.
+    supports_machine_info: bool = True
+
     @abstractmethod
     def open(self) -> None:
         """Acquire the device. Idempotent."""

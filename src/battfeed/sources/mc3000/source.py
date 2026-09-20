@@ -110,7 +110,14 @@ class Mc3000Source:
     bay, which the unit's display labels channel 1 (``slot=n`` is channel
     ``n + 1``). To collect the second bay from the left, for example, run
     ``battfeed collect --source mc3000 --opt slot=1 ...`` -- one run per
-    occupied bay.
+    occupied bay. Concurrent runs against the *same* charger work where the
+    OS shares one physical BLE link between clients (verified on Windows:
+    per-slot streams stay correctly separated because replies are matched on
+    the slot byte, though a run joining an already-connected charger may need
+    a few auto-reconnect attempts before its first sample). On other
+    platforms the second connection may be refused outright -- the HM-10
+    bridge itself accepts a single central -- in which case collect the bays
+    sequentially or via USB.
 
     Field mapping and unit conversions are documented on
     :func:`sample_from_reading`; per the BDF sign convention, positive current
@@ -287,9 +294,11 @@ class Mc3000Source:
 
         Attempted exactly once per source instance and tolerant of any
         failure: metadata() must keep working with the identity fields set to
-        ``None``. Verified on hardware: some MC3000 firmware never answers
-        the machine-info opcode at all (zero reply bytes), so retrying would
-        only add a poll-timeout of dead air to the start of every run.
+        ``None``. Over BLE the reader skips the request without touching the
+        wire (the charger sends zero reply bytes to the machine-info opcode
+        on that link -- verified on hardware -- and the 20-byte BLE framing
+        could not carry the reply anyway), so identity is effectively a
+        USB/mock-only nicety.
         """
         if not self._machine_info_attempted:
             self._machine_info_attempted = True

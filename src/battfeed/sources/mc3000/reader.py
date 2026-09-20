@@ -59,7 +59,19 @@ class Mc3000Reader:
         return out
 
     def read_machine_info(self) -> MachineInfo | None:
-        """Best-effort instrument identity; ``None`` if unavailable."""
+        """Best-effort instrument identity; ``None`` if unavailable.
+
+        Skipped without touching the wire when the transport declares it
+        cannot deliver a machine-info reply (``supports_machine_info`` is
+        False -- the BLE link, in practice), so identity never costs a
+        poll-timeout of dead air on a link that would only time out.
+        """
+        if not self.transport.supports_machine_info:
+            logger.info(
+                "machine info skipped: not available over the %s transport",
+                self.transport.frame_kind,
+            )
+            return None
         try:
             frame = self.transport.poll(CMD_MACHINE_INFO, 0)
             return decode_machine_info(frame)

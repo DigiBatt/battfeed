@@ -44,6 +44,19 @@ The format is based on Keep a Changelog and this project follows Semantic Versio
 
 ### Fixed
 
+- MC3000 over BLE no longer wastes a poll timeout (~2 s of dead air at the
+  start of every run) asking for machine info the link cannot deliver.
+  Verified on hardware: the charger sends zero reply bytes to the 0x5a
+  opcode over BLE, and the 20-byte BLE framing could not carry the >= 31
+  byte reply even if it answered. Transports now declare
+  `supports_machine_info` and the reader skips the request entirely when it
+  is False (BLE); USB and mock still report the serial. Also documented on
+  `Mc3000Source`: concurrent per-bay runs against the same charger work
+  where the OS shares one BLE link between clients (verified on Windows;
+  replies are matched on the slot byte so the streams stay separated), but
+  may be refused on platforms that give the HM-10 bridge a single central --
+  collect sequentially or via USB there.
+
 - CI type-checking on Linux: the DJI parser used
   `subprocess.CREATE_NO_WINDOW` in a conditional expression, which mypy's
   `sys.platform` narrowing does not cover (it only narrows `if` statements),

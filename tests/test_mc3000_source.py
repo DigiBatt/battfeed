@@ -222,6 +222,43 @@ def test_metadata_shape_and_machine_info():
     json.dumps(meta)  # must be JSON-serialisable for the .meta.json sidecar
 
 
+def test_machine_info_never_polled_when_transport_cannot_answer(monkeypatch):
+    """A transport that declares supports_machine_info=False (BLE, in practice)
+    must not cost a poll-timeout of dead air: the 0x5a request never goes out."""
+    from battfeed.sources.mc3000.protocol import CMD_MACHINE_INFO, encode_progress
+    from battfeed.sources.mc3000.reader import Mc3000Reader
+
+    class _BleLikeTransport(Transport):
+        frame_kind = "ble"
+        supports_machine_info = False
+        polled: list[int] = []
+
+        def open(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+        def poll(self, cmd: int, slot: int) -> bytes:
+            self.polled.append(cmd)
+            return encode_progress(_reading(slot=slot))
+
+    transport = _BleLikeTransport()
+    assert Mc3000Reader(transport).read_machine_info() is None
+    assert CMD_MACHINE_INFO not in transport.polled
+
+    # And through the source: metadata() degrades to serial=None, measurements
+    # still flow.
+    source = Mc3000Source(transport="mock")
+    monkeypatch.setattr(source_mod, "build_transport", lambda kind, address=None: transport)
+    try:
+        assert source.metadata()["serial"] is None
+        assert source.poll()  # slot readout unaffected
+    finally:
+        source.close()
+    assert CMD_MACHINE_INFO not in transport.polled
+
+
 def test_metadata_tolerates_unreachable_device(monkeypatch):
     source = Mc3000Source(transport="mock")
     monkeypatch.setattr(

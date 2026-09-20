@@ -40,6 +40,12 @@ CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb"
 
 class BleTransport(Transport):
     frame_kind = "ble"
+    # Machine info is unobtainable over BLE, twice over: the charger sends zero
+    # reply bytes to opcode 0x5a on this link (verified on hardware), and even
+    # a hypothetical reply could not be decoded -- the notification reassembler
+    # emits fixed 20-byte frames while the machine-info layout needs >= 31
+    # bytes. Declaring it here spares every run a poll-timeout of dead air.
+    supports_machine_info = False
 
     def __init__(
         self, address: str, poll_timeout_s: float = 2.0, write_settle_s: float = 0.1
